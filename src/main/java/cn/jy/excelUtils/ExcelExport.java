@@ -154,7 +154,7 @@ public class ExcelExport<R> {
     }
 
     /*回应请求 这个步骤会将磁盘文件清空*/
-    public static void send(HttpServletResponse response, String uniqueName, String excelName) throws IOException {
+    public static void response(HttpServletResponse response, String uniqueName, String excelName) throws IOException {
         /*实际上是xlsx格式的文件  但以xls格式进行发送,好像也没什么问题*/
         response.setContentType("application/vnd.ms-excel;charset=utf-8");
         response.setHeader("Content-Disposition", "attachment;filename=" + excelName + ".xls");
@@ -176,9 +176,9 @@ public class ExcelExport<R> {
     }
 
     /*将文件响应给请求*/
-    public void send(HttpServletResponse response) throws IOException {
+    public void response(HttpServletResponse response) throws IOException {
         String uniqueName = this.stopWrite();
-        ExcelExport.send(response, uniqueName, excelName);
+        ExcelExport.response(response, uniqueName, excelName);
     }
 
 
