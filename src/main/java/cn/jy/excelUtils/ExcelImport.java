@@ -69,7 +69,7 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public  ExcelImport<R> addConvert(String title, BiConsumer<R, String> setter) throws IOException {
+    public ExcelImport<R> addConvert(String title, BiConsumer<R, String> setter) throws IOException {
         addConvert(title, setter, x -> x);
         return this;
     }
@@ -124,8 +124,9 @@ public class ExcelImport<R> {
 
     }
 
+
     /* 读取 */
-    private void wtxSimpleRead(HttpServletResponse response, ExConsumer<R> insert) throws IOException {
+    public void wtxSimpleRead(HttpServletResponse response, ExConsumer<R> insert) throws IOException {
         List<R> read = readAsList(true);
         for (R row : read) {
             try {
@@ -144,7 +145,7 @@ public class ExcelImport<R> {
 
     public void response(HttpServletResponse response) throws IOException {
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
-        ExcelExport export = ExcelExport.create("result[" + LocalDateTime.now().format(dateTimeFormatter)+"]");
+        ExcelExport export = ExcelExport.create("result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");
         export.writeByMap(rows);
         export.response(response);
     }

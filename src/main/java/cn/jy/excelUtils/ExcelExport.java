@@ -3,6 +3,8 @@ package cn.jy.excelUtils;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.lang.UUID;
+import cn.hutool.core.util.ArrayUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.BigExcelWriter;
 import cn.hutool.poi.excel.ExcelUtil;
 import org.springframework.util.ResourceUtils;
@@ -28,6 +30,16 @@ public class ExcelExport<R> {
     private static final ReentrantLock reentrantLock = new ReentrantLock();
     private List<Title<R>> titles = new ArrayList<>();
 
+    /* 多级表头时会用到 全局标题深度  initTitle方法会给其赋值
+     *
+     *   |       title               |     深度=3    rowIndex=0
+     *   |   titleA    |    titleB   |     深度=2    rowIndex=1
+     *   |title1|title2|title3|title4|     深度=1    rowIndex=2
+     * */
+    public Integer MAX_TITLE_DEPTH = null;
+    /* 多级表头时会用到    深度 和 标题集合的映射关系*/
+    HashMap<Integer, List<Title>> depth2Titles = new HashMap<>();
+
     /*唯一识别名称*/
     private String uniqueName;
     /*自定义的名称*/
@@ -40,7 +52,8 @@ public class ExcelExport<R> {
     }
 
     /**
-     *  不指定导入类型
+     * 不指定导入类型
+     *
      * @param excelName
      * @return
      */
@@ -64,31 +77,32 @@ public class ExcelExport<R> {
     }
 
 
-    /**
-     * 语法糖 自动进行分页并导出 最高支持100W行
-     *
-     * @param response   spring-HttpServletResponse
-     * @param pageQuery  继承了PageQuery的类 通常是PO
-     * @param dataSource 数据源 通常是queryList
-     * @param <T>
-     * @throws IOException
-     */
+//    /**
+//     * 语法糖 自动进行分页并导出 最高支持100W行
+//     *
+//     * @param response   spring-HttpServletResponse
+//     * @param pageQuery  继承了PageQuery的类 通常是PO
+//     * @param dataSource 数据源 通常是queryList
+//     * @param <T>
+//     * @throws IOException
+//     */
 //    public <T> void wtxSimpleExport(HttpServletResponse response, T pageQuery, Function<T, List<R>> dataSource) throws IOException {
 //        PageQuery pageable = (PageQuery) pageQuery;
 //        pageable.setPageSize(1000);
-//        List<R> apply = dataSource.apply(pageQuery);
 //        for (int i = 1; i < 1001; i++) {
 //            pageable.setPageNo(i);
+//            List<R> apply = dataSource.apply(pageQuery);
 //            this.write(apply);
 //            if (pageable.getTotalPage() == null || pageable.getTotalPage() <= i) {
 //                break;
 //            }
 //        }
-//        this.send(response);
+//        this.response(response);
 //    }
 
     /**
      * 写入对象
+     *
      * @param data
      * @return
      */
@@ -118,10 +132,13 @@ public class ExcelExport<R> {
      * @return
      */
     public <T> BigExcelWriter write(List<T> vos, List<Title<T>> titles) {
-        List<HashMap<String, Object>> rows =
+
+        this.initTitles();
+
+        List<Map<String, Object>> rows =
                 vos.stream().map(
                                 vo -> {
-                                    HashMap<String, Object> row = new HashMap<>();
+                                    Map<String, Object> row = new LinkedHashMap<>();
                                     for (Title<T> title : titles) {
                                         row.put(title.titleName, title.valueFunction.apply(vo));
                                     }
@@ -133,6 +150,73 @@ public class ExcelExport<R> {
 
     }
 
+    /**
+     * 初始化所有Title  分析最大深度/所需宽度/合并单元格
+     */
+    public void initTitles() {
+        if (this.MAX_TITLE_DEPTH == null) {
+            this.MAX_TITLE_DEPTH = titles.stream()
+                    .map(x -> StrUtil.count(x.titleName, Title.PARENT_TITLE_SEPARATOR) + 1)
+                    .max(Comparator.naturalOrder())
+                    .orElse(1);
+            if (MAX_TITLE_DEPTH == 1) {
+                /*如果是单行表头 在这里就直接返回了*/
+                return;
+            }
+
+            /*多级表头初始化*/
+            for (int i = 0; i < titles.size(); i++) {
+                Title oneTitle = titles.get(i);
+                changeTitleWithMaxlength(oneTitle);
+                HashMap<Integer, Title> map = oneTitle.convert2ChainTitle(i);
+                map.forEach((depth, title) -> {
+                    if (!depth2Titles.containsKey(depth)) {
+                        depth2Titles.put(depth, new ArrayList<>());
+                    }
+                    depth2Titles.get(depth).add(title);
+                });
+            }
+
+            /*横向合并相同名称的标题 */
+            for (int i = 1; i <= MAX_TITLE_DEPTH; i++) {
+                Integer rowsIndex = getRowsIndexByDepth(i);
+                depth2Titles
+                        .get(i)
+                        .stream()
+                        .collect(Collectors.groupingBy(x -> x.titleName, Collectors.toList()))
+                        .values()
+                        .forEach(list -> {
+                            int startColIndex = list.stream().map(x -> x.startColIndex).min(Comparator.naturalOrder()).orElse(1);
+                            int endColIndex = list.stream().map(x -> x.endColIndex).max(Comparator.naturalOrder()).orElse(1);
+                            if (startColIndex == endColIndex) {
+                                this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellValue(list.get(0).titleName);
+                                this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellStyle(this.getBigExcelWriter().getHeadCellStyle());
+                                return;
+                            }
+                            this.getBigExcelWriter().merge(rowsIndex, rowsIndex, startColIndex, endColIndex, list.get(0).titleName, true);
+                        });
+                /* hutool excel 写入下移一行*/
+                this.getBigExcelWriter().setCurrentRow(this.getBigExcelWriter().getCurrentRow() + 1);
+            }
+
+            /*纵向合并相同名称的标题*/
+            for (int colIndex = 0; colIndex < titles.size(); colIndex++) {
+                Title<R> title = titles.get(colIndex);
+                int sameCount = 0; //重复的数量
+                for (Integer depth = 1; depth <= MAX_TITLE_DEPTH; depth++) {
+                    if (title.parentTitle != null && title.titleName.equals(title.parentTitle.titleName)) {
+                        /*发现重复的单元格,不会马上合并 因为可能有更多重复的*/
+                        sameCount++;
+                    } else if (sameCount != 0) {
+                        /*合并单元格*/
+                        this.getBigExcelWriter().merge(getRowsIndexByDepth(depth), getRowsIndexByDepth(depth) + sameCount, colIndex, colIndex, title.titleName, true);
+                        sameCount = 0;
+                    }
+                    title = title.parentTitle;
+                }
+            }
+        }
+    }
 
     /*保存文件*/
     private String stopWrite() {
@@ -145,11 +229,12 @@ public class ExcelExport<R> {
     /**
      * 自动设置列宽 : 简单粗暴将前100列都设置宽度
      */
-    private void autoSetColumnWidth(){
-        for (int i = 0; i <100 ; i++) {
+    private void autoSetColumnWidth() {
+        for (int i = 0; i < 100; i++) {
             try {
                 getBigExcelWriter().setColumnWidth(i, 20);
-            }catch (Exception ignored){ }
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -230,13 +315,53 @@ public class ExcelExport<R> {
     }
 
     /**
-     * 标题类
+     * 获取行坐标   如果最大深度为4  当前深度为1  则处于第4行
+     *
+     * @param depth 深度
+     * @return
+     */
+    private Integer getRowsIndexByDepth(int depth) {
+        return MAX_TITLE_DEPTH - depth;
+    }
+
+
+    /**
+     * 自动复制最后一级的表头  以补足最大表头深度  这样可以使深度统一
+     * <p>
+     * 例如:   A::B::C
+     * D::F::G::H
+     * 这样表头会参差不齐, 对A::B::C 补全为 A::B::C::C 统一成为了4级深度
+     *
+     * @param title
+     * @return 原对象
+     */
+    private Title changeTitleWithMaxlength(Title title) {
+        int currentMaxDepth = StrUtil.count(title.titleName, Title.PARENT_TITLE_SEPARATOR) + 1;
+        if (MAX_TITLE_DEPTH != currentMaxDepth) {
+            String[] split = title.titleName.split(Title.PARENT_TITLE_SEPARATOR);
+            String lastTitleName = split[split.length - 1];
+            for (int y = 0; y < MAX_TITLE_DEPTH - currentMaxDepth; y++) {
+                title.titleName = title.titleName + Title.PARENT_TITLE_SEPARATOR + lastTitleName;
+            }
+        }
+        return title;
+    }
+
+    /**
+     * 标题类  是个单向链表 会指向自己的父表头
      *
      * @param <T>
      */
     public static class Title<T> {
+        public Title parentTitle;
         public String titleName;
         public Function<T, Object> valueFunction;
+        /* 父标题分隔符*/
+        public static String PARENT_TITLE_SEPARATOR = "::";
+        /* 列坐标 开始于第几列  */
+        public int startColIndex;
+        /* 列坐标 结束于第几列 */
+        public int endColIndex;
 
         public Title(String titleName, Function<T, Object> valueFunction) {
             this.titleName = titleName;
@@ -253,5 +378,42 @@ public class ExcelExport<R> {
             newTitle.valueFunction = valueFunction;
             return newTitle;
         }
+
+        /**
+         * (如果可以)将Title转换成链表  并返回一个深度集合   每个Title指向一个parentTitle
+         *
+         * @param currentColIndex 当前标题的列位置
+         * @return Map key=深度  value = title对象
+         */
+        private HashMap<Integer, Title> convert2ChainTitle(int currentColIndex) {
+            this.startColIndex = currentColIndex;
+            this.endColIndex = currentColIndex;
+
+            HashMap<Integer, Title> depth2Title = new HashMap<>();
+            depth2Title.put(1, this);
+            if (titleName.contains(PARENT_TITLE_SEPARATOR)) {
+                //倒序  源: titleParentParent::titleParent::title  转换后 [title,titleParent,titleParentParent]
+                String[] split = ArrayUtil.reverse(titleName.split(PARENT_TITLE_SEPARATOR));
+                this.titleName = split[0];
+
+                Title currentTitle = this;
+                for (int i = 0; i < split.length; i++) {
+                    int depth = i + 1;
+                    if (depth != split.length) {
+                        /* 生成父Title */
+                        Title parentTitle = new Title<>();
+                        parentTitle.titleName = split[depth];
+                        parentTitle.startColIndex = currentColIndex;
+                        parentTitle.endColIndex = currentColIndex;
+                        currentTitle.parentTitle = parentTitle;
+                    }
+                    depth2Title.put(depth, currentTitle);
+                    currentTitle = currentTitle.parentTitle;
+                }
+            }
+            return depth2Title;
+        }
+
+
     }
 }
