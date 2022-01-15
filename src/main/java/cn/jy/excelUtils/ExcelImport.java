@@ -100,7 +100,7 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public List<R> readAsList(boolean returnEmptyIfFail) {
+    public List<R> readAsList(boolean returnEmptyIfExitsConvertFail) {
         /*是否存在检测不通过的情况*/
         boolean existsCheckFail = false;
         rows = currentReader.readAll();
@@ -117,7 +117,7 @@ public class ExcelImport<R> {
                 object2Row.remove(currentObject);
             }
         }
-        if (existsCheckFail && returnEmptyIfFail) {
+        if (existsCheckFail && returnEmptyIfExitsConvertFail) {
             return Collections.EMPTY_LIST;
         }
         return new ArrayList<R>(object2Row.keySet());
