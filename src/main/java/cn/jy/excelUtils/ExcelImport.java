@@ -110,7 +110,7 @@ public class ExcelImport<R> {
             try {
                 rowCheckMustExist(row);
                 rowConvert(row);
-                row.put(RESULT_TITLE, getCheckSuccessMsg());
+                row.put(RESULT_TITLE, getConvertSuccessMsg());
             } catch (MyException e) {
                 existsCheckFail = true;
                 row.put(RESULT_TITLE, e.getMessage());
@@ -208,8 +208,8 @@ public class ExcelImport<R> {
 
 
     /*校验成功的提示信息*/
-    private static String getCheckSuccessMsg() {
-        return "校验通过!";
+    private static String getConvertSuccessMsg() {
+        return "格式验证通过!";
     }
 
     /*导入失败的提示信息*/
