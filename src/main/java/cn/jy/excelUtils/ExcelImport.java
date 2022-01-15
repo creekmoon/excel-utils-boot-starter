@@ -124,19 +124,9 @@ public class ExcelImport<R> {
 
     }
 
-    /* 读取文件  忽略转换失败的行 */
-    public void wtxSimpleReadAndSkipErrorRow(HttpServletResponse response,ExConsumer<R> insert) throws IOException {
-        simpleRead(response, insert, false);
-    }
-
-    /* 读取  遇到失败则停止 */
-    public void wtxSimpleRead(HttpServletResponse response,ExConsumer<R> insert) throws IOException {
-        simpleRead(response, insert, true);
-    }
-
     /* 读取 */
-    private void simpleRead(HttpServletResponse response,ExConsumer<R> insert, Boolean returnEmptyIfFail) throws IOException {
-        List<R> read = readAsList(returnEmptyIfFail);
+    private void wtxSimpleRead(HttpServletResponse response, ExConsumer<R> insert) throws IOException {
+        List<R> read = readAsList(true);
         for (R row : read) {
             try {
                 insert.accept(row);
