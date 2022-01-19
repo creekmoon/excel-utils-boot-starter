@@ -204,13 +204,24 @@ public class ExcelExport<R> {
         for (int i = 1; i <= MAX_TITLE_DEPTH; i++) {
             Integer rowsIndex = getRowsIndexByDepth(i);
             final int finalI = i;
-            depth2Titles
+            Map<Object, List<Title>> collect = depth2Titles
                     .get(i)
                     .stream()
-                    .collect(Collectors.groupingBy(x -> {
-                        /*相同名称的表头进行合并. 如果深度为1则不分组*/
-                        return finalI == 1 ? x : x.titleName;
-                    }, Collectors.toList()))
+                    .collect(Collectors.groupingBy(title -> {
+                        /*如果深度为1则不分组*/
+                        if (finalI == 1) {
+                            return title;
+                        }
+                        /*如果深度大于1则分组 同一组的就进行横向合并*/
+                        Title x = title;
+                        StringBuilder groupName = new StringBuilder(x.titleName);
+                        while (x.parentTitle != null) {
+                            groupName.insert(0, x.parentTitle.titleName + Title.PARENT_TITLE_SEPARATOR);
+                            x = x.parentTitle;
+                        }
+                        return groupName.toString();
+                    }, Collectors.toList()));
+            collect
                     .values()
                     .forEach(list -> {
                         int startColIndex = list.stream().map(x -> x.startColIndex).min(Comparator.naturalOrder()).orElse(1);
@@ -286,7 +297,7 @@ public class ExcelExport<R> {
         /*使用流将文件传输回去v*/
         ServletOutputStream out = response.getOutputStream();
         FileInputStream fileInputStream = new FileInputStream(getAbsoluteFilePath(uniqueName));
-        byte[] b = new byte[4096];  //创建数据缓冲区 8192是通过网络发送的包的最大大小   PeterLawrey的答案:  从网络访问数据时为2-8kb，从硬盘访问时为32-64kb。
+        byte[] b = new byte[4096];  //创建数据缓冲区
         int length;
         while ((length = fileInputStream.read(b)) > 0) {
             out.write(b, 0, length);
