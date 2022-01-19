@@ -267,7 +267,7 @@ public class ExcelExport<R> {
         /*使用流将文件传输回去v*/
         ServletOutputStream out = response.getOutputStream();
         FileInputStream fileInputStream = new FileInputStream(getAbsoluteFilePath(uniqueName));
-        byte[] b = new byte[8192];  //创建数据缓冲区 8192是通过网络发送的包的最大大小   PeterLawrey的答案:  从网络访问数据时为2-8kb，从硬盘访问时为32-64kb。
+        byte[] b = new byte[4096];  //创建数据缓冲区 8192是通过网络发送的包的最大大小   PeterLawrey的答案:  从网络访问数据时为2-8kb，从硬盘访问时为32-64kb。
         int length;
         while ((length = fileInputStream.read(b)) > 0) {
             out.write(b, 0, length);
