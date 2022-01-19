@@ -142,13 +142,12 @@ public class ExcelExport<R> {
      * @return
      */
     private <T> BigExcelWriter write(List<T> vos, List<Title<T>> titles, boolean ignoreValueGetterUnCatchException) {
-
-        this.initTitles();
-
-        List<Map<String, Object>> rows =
-                vos.stream().map(
+        this.initTitles(false);
+        List<List<Object>> rows =
+                vos.stream()
+                        .map(
                                 vo -> {
-                                    Map<String, Object> row = new LinkedHashMap<>();
+                                    List<Object> row = new LinkedList<>();
                                     for (Title<T> title : titles) {
                                         Object apply = null;
                                         if (ignoreValueGetterUnCatchException) {
@@ -158,84 +157,104 @@ public class ExcelExport<R> {
                                             }
                                         } else {
                                             apply = title.valueFunction.apply(vo);
-
                                         }
-                                        row.put(title.titleName, apply);
+                                        row.add(apply);
                                     }
                                     return row;
                                 })
                         .collect(Collectors.toList());
         getBigExcelWriter().write(rows);
         return getBigExcelWriter();
-
     }
 
     /**
-     * 初始化所有Title  分析最大深度/所需宽度/合并单元格
+     * 初始化标题
+     *
+     * @param showDetails 是否在控制台显示合并细节,方便debug
      */
-    public void initTitles() {
-        if (this.MAX_TITLE_DEPTH == null) {
-            this.MAX_TITLE_DEPTH = titles.stream()
-                    .map(x -> StrUtil.count(x.titleName, Title.PARENT_TITLE_SEPARATOR) + 1)
-                    .max(Comparator.naturalOrder())
-                    .orElse(1);
-            if (MAX_TITLE_DEPTH == 1) {
-                /*如果是单行表头 在这里就直接返回了*/
-                return;
-            }
+    public void initTitles(boolean showDetails) {
 
-            /*多级表头初始化*/
-            for (int i = 0; i < titles.size(); i++) {
-                Title oneTitle = titles.get(i);
-                changeTitleWithMaxlength(oneTitle);
-                HashMap<Integer, Title> map = oneTitle.convert2ChainTitle(i);
-                map.forEach((depth, title) -> {
-                    if (!depth2Titles.containsKey(depth)) {
-                        depth2Titles.put(depth, new ArrayList<>());
-                    }
-                    depth2Titles.get(depth).add(title);
-                });
-            }
+        /*如果已经初始化完毕 则不进行初始化*/
+        if (this.MAX_TITLE_DEPTH != null) {
+            return;
+        }
 
-            /*横向合并相同名称的标题 */
-            for (int i = 1; i <= MAX_TITLE_DEPTH; i++) {
-                Integer rowsIndex = getRowsIndexByDepth(i);
-                depth2Titles
-                        .get(i)
-                        .stream()
-                        .collect(Collectors.groupingBy(x -> x.titleName, Collectors.toList()))
-                        .values()
-                        .forEach(list -> {
-                            int startColIndex = list.stream().map(x -> x.startColIndex).min(Comparator.naturalOrder()).orElse(1);
-                            int endColIndex = list.stream().map(x -> x.endColIndex).max(Comparator.naturalOrder()).orElse(1);
-                            if (startColIndex == endColIndex) {
-                                this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellValue(list.get(0).titleName);
-                                this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellStyle(this.getBigExcelWriter().getHeadCellStyle());
-                                return;
-                            }
-                            this.getBigExcelWriter().merge(rowsIndex, rowsIndex, startColIndex, endColIndex, list.get(0).titleName, true);
-                        });
-                /* hutool excel 写入下移一行*/
-                this.getBigExcelWriter().setCurrentRow(this.getBigExcelWriter().getCurrentRow() + 1);
-            }
+        this.MAX_TITLE_DEPTH = titles.stream()
+                .map(x -> StrUtil.count(x.titleName, Title.PARENT_TITLE_SEPARATOR) + 1)
+                .max(Comparator.naturalOrder())
+                .orElse(1);
+        if (showDetails) {
+            System.out.println("[Excel构建] 表头深度获取成功! 表头最大深度为" + this.MAX_TITLE_DEPTH);
+        }
 
-            /*纵向合并title*/
-            for (int colIndex = 0; colIndex < titles.size(); colIndex++) {
-                Title<R> title = titles.get(colIndex);
-                int sameCount = 0; //重复的数量
-                for (Integer depth = 1; depth <= MAX_TITLE_DEPTH; depth++) {
-                    if (title.parentTitle != null && title.titleName.equals(title.parentTitle.titleName)) {
-                        /*发现重复的单元格,不会马上合并 因为可能有更多重复的*/
-                        sameCount++;
-                    } else if (sameCount != 0) {
-                        /*合并单元格*/
-                        this.getBigExcelWriter().merge(getRowsIndexByDepth(depth), getRowsIndexByDepth(depth) + sameCount, colIndex, colIndex, title.titleName, true);
-                        sameCount = 0;
-                    }
-                    title = title.parentTitle;
+        /*多级表头初始化*/
+        for (int i = 0; i < titles.size(); i++) {
+            Title oneTitle = titles.get(i);
+            changeTitleWithMaxlength(oneTitle);
+            HashMap<Integer, Title> map = oneTitle.convert2ChainTitle(i);
+            map.forEach((depth, title) -> {
+                if (!depth2Titles.containsKey(depth)) {
+                    depth2Titles.put(depth, new ArrayList<>());
                 }
+                depth2Titles.get(depth).add(title);
+            });
+        }
+
+        /*横向合并相同名称的标题 PS:不会对最后一行进行横向合并 意味着允许最后一行出现相同的名称*/
+        for (int i = 1; i <= MAX_TITLE_DEPTH; i++) {
+            Integer rowsIndex = getRowsIndexByDepth(i);
+            final int finalI = i;
+            depth2Titles
+                    .get(i)
+                    .stream()
+                    .collect(Collectors.groupingBy(x -> {
+                        /*相同名称的表头进行合并. 如果深度为1则不分组*/
+                        return finalI == 1 ? x : x.titleName;
+                    }, Collectors.toList()))
+                    .values()
+                    .forEach(list -> {
+                        int startColIndex = list.stream().map(x -> x.startColIndex).min(Comparator.naturalOrder()).orElse(1);
+                        int endColIndex = list.stream().map(x -> x.endColIndex).max(Comparator.naturalOrder()).orElse(1);
+                        if (startColIndex == endColIndex) {
+                            if (showDetails) {
+                                System.out.println("[Excel构建] 插入表头" + list.get(0).titleName);
+                            }
+                            this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellValue(list.get(0).titleName);
+                            this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellStyle(this.getBigExcelWriter().getHeadCellStyle());
+                            return;
+                        }
+                        if (showDetails) {
+                            System.out.println("[Excel构建] 插入表头并横向合并" + list.get(0).titleName + "  预计合并格数" + (endColIndex - startColIndex));
+                        }
+                        this.getBigExcelWriter().merge(rowsIndex, rowsIndex, startColIndex, endColIndex, list.get(0).titleName, true);
+                        if (showDetails) {
+                            System.out.println("[Excel构建] 横向合并表头" + list.get(0).titleName + "完毕");
+                        }
+                    });
+            /* hutool excel 写入下移一行*/
+            this.getBigExcelWriter().setCurrentRow(this.getBigExcelWriter().getCurrentRow() + 1);
+        }
+
+        /*纵向合并title*/
+        for (int colIndex = 0; colIndex < titles.size(); colIndex++) {
+            Title<R> title = titles.get(colIndex);
+            int sameCount = 0; //重复的数量
+            for (Integer depth = 1; depth <= MAX_TITLE_DEPTH; depth++) {
+                if (title.parentTitle != null && title.titleName.equals(title.parentTitle.titleName)) {
+                    /*发现重复的单元格,不会马上合并 因为可能有更多重复的*/
+                    sameCount++;
+                } else if (sameCount != 0) {
+                    if (showDetails) {
+                        System.out.println("[Excel构建] 表头纵向合并" + title.titleName + "  预计合并格数" + sameCount);
+                    }
+                    /*合并单元格*/
+                    this.getBigExcelWriter().merge(getRowsIndexByDepth(depth), getRowsIndexByDepth(depth) + sameCount, colIndex, colIndex, title.titleName, true);
+                    sameCount = 0;
+                }
+                title = title.parentTitle;
             }
         }
+
     }
 
     /*保存文件*/
@@ -264,7 +283,7 @@ public class ExcelExport<R> {
         response.setContentType("application/vnd.ms-excel;charset=utf-8");
         response.setHeader("Content-Disposition", "attachment;filename=" + excelName + ".xls");
 
-        /*使用流将文件传输回去*/
+        /*使用流将文件传输回去v*/
         ServletOutputStream out = response.getOutputStream();
         FileInputStream fileInputStream = new FileInputStream(getAbsoluteFilePath(uniqueName));
         byte[] b = new byte[4096];  //创建数据缓冲区 8192是通过网络发送的包的最大大小   PeterLawrey的答案:  从网络访问数据时为2-8kb，从硬盘访问时为32-64kb。
