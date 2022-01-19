@@ -294,20 +294,26 @@ public class ExcelExport<R> {
         response.setContentType("application/vnd.ms-excel;charset=utf-8");
         response.setHeader("Content-Disposition", "attachment;filename=" + excelName + ".xls");
 
-        /*使用流将文件传输回去v*/
-        ServletOutputStream out = response.getOutputStream();
-        FileInputStream fileInputStream = new FileInputStream(getAbsoluteFilePath(uniqueName));
-        byte[] b = new byte[4096];  //创建数据缓冲区
-        int length;
-        while ((length = fileInputStream.read(b)) > 0) {
-            out.write(b, 0, length);
+        /*使用流将文件传输回去*/
+        ServletOutputStream out = null;
+        FileInputStream fileInputStream = null;
+        try {
+            out = response.getOutputStream();
+            fileInputStream = new FileInputStream(getAbsoluteFilePath(uniqueName));
+            byte[] b = new byte[4096];  //创建数据缓冲区  通常网络2-8K 磁盘32K-64K
+            int length;
+            while ((length = fileInputStream.read(b)) > 0) {
+                out.write(b, 0, length);
+            }
+            out.flush();
+            out.close();
+        } finally {
+            IoUtil.close(fileInputStream);
+            IoUtil.close(out);
+            /*清除临时文件*/
+            cleanTempFile(uniqueName);
         }
-        out.flush();
-        out.close();
-        IoUtil.close(fileInputStream);
-        IoUtil.close(out);
-        /*清除临时文件*/
-        cleanTempFile(uniqueName);
+
     }
 
     /*将文件响应给请求*/
