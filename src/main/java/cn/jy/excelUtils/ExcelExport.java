@@ -77,22 +77,22 @@ public class ExcelExport<R> {
     }
 
 
-//    /**
-//     * 语法糖 自动进行分页并导出 最高支持100W行
-//     *
-//     * @param response   spring-HttpServletResponse
-//     * @param pageQuery  继承了PageQuery的类 通常是PO
-//     * @param dataSource 数据源 通常是queryList
-//     * @param <T>
-//     * @throws IOException
-//     */
+    /**
+     * 语法糖 自动进行分页并导出 最高支持100W行
+     *
+     * @param response   spring-HttpServletResponse
+     * @param pageQuery  继承了PageQuery的类 通常是PO
+     * @param dataSource 数据源 通常是queryList
+     * @param <T>
+     * @throws IOException
+     */
 //    public <T> void wtxSimpleExport(HttpServletResponse response, T pageQuery, Function<T, List<R>> dataSource) throws IOException {
 //        PageQuery pageable = (PageQuery) pageQuery;
 //        pageable.setPageSize(1000);
 //        for (int i = 1; i < 1001; i++) {
 //            pageable.setPageNo(i);
 //            List<R> apply = dataSource.apply(pageQuery);
-//            this.write(apply);
+//            this.writeAndIgnoreValueGetterException(apply);
 //            if (pageable.getTotalPage() == null || pageable.getTotalPage() <= i) {
 //                break;
 //            }
@@ -107,9 +107,18 @@ public class ExcelExport<R> {
      * @return
      */
     public BigExcelWriter write(List<R> data) {
-        return write(data, titles);
+        return write(data, titles, false);
     }
 
+    /**
+     * 写入对象 并忽略未捕获的getter异常
+     *
+     * @param data
+     * @return
+     */
+    public BigExcelWriter writeAndIgnoreValueGetterException(List<R> data) {
+        return write(data, titles, true);
+    }
 
     /**
      * 以map形式写入
@@ -126,12 +135,13 @@ public class ExcelExport<R> {
     /**
      * 以对象形式写入
      *
-     * @param vos    数据集
-     * @param titles 标题映射关系
+     * @param vos                               数据集
+     * @param titles                            标题映射关系
+     * @param ignoreValueGetterUnCatchException 忽略值的getter方法异常 通常是多层get导致空指针
      * @param <T>
      * @return
      */
-    public <T> BigExcelWriter write(List<T> vos, List<Title<T>> titles) {
+    private <T> BigExcelWriter write(List<T> vos, List<Title<T>> titles, boolean ignoreValueGetterUnCatchException) {
 
         this.initTitles();
 
@@ -140,7 +150,17 @@ public class ExcelExport<R> {
                                 vo -> {
                                     Map<String, Object> row = new LinkedHashMap<>();
                                     for (Title<T> title : titles) {
-                                        row.put(title.titleName, title.valueFunction.apply(vo));
+                                        Object apply = null;
+                                        if (ignoreValueGetterUnCatchException) {
+                                            try {
+                                                apply = title.valueFunction.apply(vo);
+                                            } catch (Exception ignored) {
+                                            }
+                                        } else {
+                                            apply = title.valueFunction.apply(vo);
+
+                                        }
+                                        row.put(title.titleName, apply);
                                     }
                                     return row;
                                 })
@@ -199,7 +219,7 @@ public class ExcelExport<R> {
                 this.getBigExcelWriter().setCurrentRow(this.getBigExcelWriter().getCurrentRow() + 1);
             }
 
-            /*纵向合并相同名称的标题*/
+            /*纵向合并title*/
             for (int colIndex = 0; colIndex < titles.size(); colIndex++) {
                 Title<R> title = titles.get(colIndex);
                 int sameCount = 0; //重复的数量
