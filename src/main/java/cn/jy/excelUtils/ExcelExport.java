@@ -29,7 +29,10 @@ public class ExcelExport<R> {
     private static volatile String applicationParentFilePath;
     private static final ReentrantLock reentrantLock = new ReentrantLock();
     private List<Title<R>> titles = new ArrayList<>();
-
+    /**
+     * 打印调试内容
+     */
+    private boolean showDebuggerDetail = false;
     /* 多级表头时会用到 全局标题深度  initTitle方法会给其赋值
      *
      *   |       title               |     深度=3    rowIndex=0
@@ -76,7 +79,9 @@ public class ExcelExport<R> {
         return this;
     }
 
-
+    public void debug() {
+        this.showDebuggerDetail = true;
+    }
     /**
      * 语法糖 自动进行分页并导出 最高支持100W行
      *
@@ -142,7 +147,7 @@ public class ExcelExport<R> {
      * @return
      */
     private <T> BigExcelWriter write(List<T> vos, List<Title<T>> titles, boolean ignoreValueGetterUnCatchException) {
-        this.initTitles(false);
+        this.initTitles();
         List<List<Object>> rows =
                 vos.stream()
                         .map(
@@ -169,10 +174,8 @@ public class ExcelExport<R> {
 
     /**
      * 初始化标题
-     *
-     * @param showDetails 是否在控制台显示合并细节,方便debug
      */
-    public void initTitles(boolean showDetails) {
+    public void initTitles() {
 
         /*如果已经初始化完毕 则不进行初始化*/
         if (this.MAX_TITLE_DEPTH != null) {
@@ -183,7 +186,7 @@ public class ExcelExport<R> {
                 .map(x -> StrUtil.count(x.titleName, Title.PARENT_TITLE_SEPARATOR) + 1)
                 .max(Comparator.naturalOrder())
                 .orElse(1);
-        if (showDetails) {
+        if (showDebuggerDetail) {
             System.out.println("[Excel构建] 表头深度获取成功! 表头最大深度为" + this.MAX_TITLE_DEPTH);
         }
 
@@ -227,18 +230,18 @@ public class ExcelExport<R> {
                         int startColIndex = list.stream().map(x -> x.startColIndex).min(Comparator.naturalOrder()).orElse(1);
                         int endColIndex = list.stream().map(x -> x.endColIndex).max(Comparator.naturalOrder()).orElse(1);
                         if (startColIndex == endColIndex) {
-                            if (showDetails) {
+                            if (showDebuggerDetail) {
                                 System.out.println("[Excel构建] 插入表头" + list.get(0).titleName);
                             }
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellValue(list.get(0).titleName);
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellStyle(this.getBigExcelWriter().getHeadCellStyle());
                             return;
                         }
-                        if (showDetails) {
+                        if (showDebuggerDetail) {
                             System.out.println("[Excel构建] 插入表头并横向合并" + list.get(0).titleName + "  预计合并格数" + (endColIndex - startColIndex));
                         }
                         this.getBigExcelWriter().merge(rowsIndex, rowsIndex, startColIndex, endColIndex, list.get(0).titleName, true);
-                        if (showDetails) {
+                        if (showDebuggerDetail) {
                             System.out.println("[Excel构建] 横向合并表头" + list.get(0).titleName + "完毕");
                         }
                     });
@@ -255,7 +258,7 @@ public class ExcelExport<R> {
                     /*发现重复的单元格,不会马上合并 因为可能有更多重复的*/
                     sameCount++;
                 } else if (sameCount != 0) {
-                    if (showDetails) {
+                    if (showDebuggerDetail) {
                         System.out.println("[Excel构建] 表头纵向合并" + title.titleName + "  预计合并格数" + sameCount);
                     }
                     /*合并单元格*/
