@@ -100,7 +100,15 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public List<R> readAsList(boolean returnEmptyIfExitsConvertFail) {
+    public List<R> readAndSkipConvertFailRow(){
+        return readAsList(false);
+    }
+
+    public List<R> read(){
+        return readAsList(true);
+    }
+
+    private List<R> readAsList(boolean mustAllSuccess) {
         /*是否存在检测不通过的情况*/
         boolean existsCheckFail = false;
         rows = currentReader.readAll();
@@ -117,7 +125,7 @@ public class ExcelImport<R> {
                 object2Row.remove(currentObject);
             }
         }
-        if (existsCheckFail && returnEmptyIfExitsConvertFail) {
+        if (existsCheckFail && mustAllSuccess) {
             return Collections.EMPTY_LIST;
         }
         return new ArrayList<R>(object2Row.keySet());
@@ -127,7 +135,7 @@ public class ExcelImport<R> {
 
     /* 读取 */
     public void wtxSimpleRead(HttpServletResponse response, ExConsumer<R> insert) throws IOException {
-        List<R> read = readAsList(true);
+        List<R> read = read();
         for (R row : read) {
             try {
                 insert.accept(row);
