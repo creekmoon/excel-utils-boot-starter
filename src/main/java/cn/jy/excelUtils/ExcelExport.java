@@ -1,6 +1,7 @@
 package cn.jy.excelUtils;
 
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.ArrayUtil;
@@ -11,10 +12,7 @@ import org.springframework.util.ResourceUtils;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -299,10 +297,10 @@ public class ExcelExport<R> {
 
         /*使用流将文件传输回去*/
         ServletOutputStream out = null;
-        FileInputStream fileInputStream = null;
+        InputStream fileInputStream = null;
         try {
             out = response.getOutputStream();
-            fileInputStream = new FileInputStream(getAbsoluteFilePath(uniqueName));
+            fileInputStream = FileUtil.getInputStream(getAbsoluteFilePath(uniqueName));
             byte[] b = new byte[4096];  //创建数据缓冲区  通常网络2-8K 磁盘32K-64K
             int length;
             while ((length = fileInputStream.read(b)) > 0) {
@@ -357,8 +355,7 @@ public class ExcelExport<R> {
      * @throws IOException
      */
     private static void cleanTempFile(String uniqueName) throws IOException {
-        File file = new File(getAbsoluteFilePath(uniqueName));
-        if (file.exists() && !file.delete()) {
+        if (FileUtil.del(getAbsoluteFilePath(uniqueName))) {
             throw new IOException("清理临时文件失败! 路径:" + getAbsoluteFilePath(uniqueName));
         }
     }
