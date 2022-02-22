@@ -109,7 +109,7 @@ public class ExcelExport<R> {
      * @param data
      * @return
      */
-    public BigExcelWriter write(List<R> data) {
+    public ExcelExport<R> write(List<R> data) {
         return write(data, titles, false);
     }
 
@@ -119,7 +119,7 @@ public class ExcelExport<R> {
      * @param data
      * @return
      */
-    public BigExcelWriter writeAndIgnoreValueGetterException(List<R> data) {
+    public ExcelExport<R> writeAndIgnoreValueGetterException(List<R> data) {
         return write(data, titles, true);
     }
 
@@ -144,7 +144,7 @@ public class ExcelExport<R> {
      * @param <T>
      * @return
      */
-    private <T> BigExcelWriter write(List<T> vos, List<Title<T>> titles, boolean ignoreValueGetterUnCatchException) {
+    private <T> ExcelExport<R> write(List<T> vos, List<Title<T>> titles, boolean ignoreValueGetterUnCatchException) {
         this.initTitles();
         List<List<Object>> rows =
                 vos.stream()
@@ -167,7 +167,7 @@ public class ExcelExport<R> {
                                 })
                         .collect(Collectors.toList());
         getBigExcelWriter().write(rows);
-        return getBigExcelWriter();
+        return this;
     }
 
     /**
