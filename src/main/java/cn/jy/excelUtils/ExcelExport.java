@@ -89,12 +89,18 @@ public class ExcelExport<R> {
      * @param <T>
      * @throws IOException
      */
-//    public <T> void wtxSimpleExport(HttpServletResponse response, T pageQuery, Function<T, List<R>> dataSource) throws IOException {
+//    public <T> void wtxSimpleExport(HttpServletResponse response, T pageQuery, ExFunction<T, List<R>> dataSource) throws IOException {
 //        PageQuery pageable = (PageQuery) pageQuery;
 //        pageable.setPageSize(1000);
 //        for (int i = 1; i < 1001; i++) {
 //            pageable.setPageNo(i);
-//            List<R> apply = dataSource.apply(pageQuery);
+//            List<R> apply = null;
+//            try {
+//                apply = dataSource.apply(pageQuery);
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//                break;
+//            }
 //            this.writeAndIgnoreValueGetterException(apply);
 //            if (pageable.getTotalPage() == null || pageable.getTotalPage() <= i) {
 //                break;

@@ -63,40 +63,40 @@ public class ExcelImport<R> {
         return excelImport;
     }
 
-    public <T> ExcelImport<R> addConvert(String title, BiConsumer<R, T> setter, ExFunction<String, T> convert) throws IOException {
+    public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) throws IOException {
         converts.put(title, convert);
         consumers.put(title, setter);
         return this;
     }
 
     public ExcelImport<R> addConvert(String title, BiConsumer<R, String> setter) throws IOException {
-        addConvert(title, setter, x -> x);
+        addConvert(title, x -> x, setter);
         return this;
     }
 
 
     public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, BiConsumer<R, String> setter) throws IOException {
         skipEmptyTitles.add(title);
-        addConvertAndMustExist(title, setter, x -> x);
+        addConvertAndMustExist(title, x -> x, setter);
         return this;
     }
 
-    public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, BiConsumer<R, T> setter, ExFunction<String, T> convert) throws IOException {
+    public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) throws IOException {
         skipEmptyTitles.add(title);
-        addConvertAndMustExist(title, setter, convert);
+        addConvertAndMustExist(title, convert, setter);
         return this;
     }
 
 
     public ExcelImport<R> addConvertAndMustExist(String title, BiConsumer<R, String> setter) throws IOException {
         mustExistTitles.add(title);
-        addConvertAndMustExist(title, setter, x -> x);
+        addConvertAndMustExist(title, x -> x, setter);
         return this;
     }
 
-    public <T> ExcelImport<R> addConvertAndMustExist(String title, BiConsumer<R, T> setter, ExFunction<String, T> convert) throws IOException {
+    public <T> ExcelImport<R> addConvertAndMustExist(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) throws IOException {
         mustExistTitles.add(title);
-        this.addConvert(title, setter, convert);
+        this.addConvert(title, convert, setter);
         return this;
     }
 
