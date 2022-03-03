@@ -4,16 +4,25 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.lang.UUID;
+import cn.hutool.core.thread.ThreadFactoryBuilder;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.BigExcelWriter;
 import cn.hutool.poi.excel.ExcelUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.ResourceUtils;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -22,11 +31,28 @@ import java.util.stream.Collectors;
  * @author JY
  * @date 2022-01-05
  */
+@Slf4j
 public class ExcelExport<R> {
+
     /*临时文件目录*/
     private static volatile String applicationParentFilePath;
     private static final ReentrantLock reentrantLock = new ReentrantLock();
     private List<Title<R>> titles = new ArrayList<>();
+
+    /*一个延迟任务线程池*/
+    private static ScheduledThreadPoolExecutor cleanTempFileExecutorService;
+    private static ThreadFactory threadFactory =  ThreadFactoryBuilder
+            .create()
+            .setNamePrefix("export-clean-temp-file-thread")
+            .build();
+
+    static {
+        cleanTempFileExecutorService = new ScheduledThreadPoolExecutor(
+                1,
+                threadFactory,
+                new ThreadPoolExecutor.AbortPolicy());
+    }
+
     /**
      * 打印调试内容
      */
@@ -80,6 +106,7 @@ public class ExcelExport<R> {
     public void debug() {
         this.showDebuggerDetail = true;
     }
+
     /**
      * 语法糖 自动进行分页并导出 最高支持100W行
      *
@@ -360,10 +387,12 @@ public class ExcelExport<R> {
      * @param uniqueName
      * @throws IOException
      */
-    private static void cleanTempFile(String uniqueName) throws IOException {
-        if (FileUtil.del(getAbsoluteFilePath(uniqueName))) {
-            throw new IOException("清理临时文件失败! 路径:" + getAbsoluteFilePath(uniqueName));
-        }
+    private static void cleanTempFile(String uniqueName) {
+        cleanTempFileExecutorService.schedule(() -> {
+            if (FileUtil.del(getAbsoluteFilePath(uniqueName))) {
+                log.warn("清理临时文件失败! 路径:" + getAbsoluteFilePath(uniqueName));
+            }
+        }, 1, TimeUnit.MINUTES);
     }
 
     /**
