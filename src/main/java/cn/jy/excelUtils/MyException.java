@@ -1,7 +1,0 @@
-package cn.jy.excelUtils;
-
-public class MyException extends Exception{
-    public MyException(String message) {
-        super(message);
-    }
-}

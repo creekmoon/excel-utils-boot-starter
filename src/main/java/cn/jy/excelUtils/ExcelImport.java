@@ -14,7 +14,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+
+import static cn.jy.excelUtils.ExcelConstants.*;
 
 /**
  * @author JY
@@ -63,19 +66,19 @@ public class ExcelImport<R> {
         return excelImport;
     }
 
-    public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) throws IOException {
+    public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
         converts.put(title, convert);
         consumers.put(title, setter);
         return this;
     }
 
-    public ExcelImport<R> addConvert(String title, BiConsumer<R, String> setter) throws IOException {
+    public ExcelImport<R> addConvert(String title, BiConsumer<R, String> setter) {
         addConvert(title, x -> x, setter);
         return this;
     }
 
 
-    public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, BiConsumer<R, String> setter) throws IOException {
+    public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, BiConsumer<R, String> setter) {
         skipEmptyTitles.add(title);
         addConvertAndMustExist(title, x -> x, setter);
         return this;
@@ -88,27 +91,29 @@ public class ExcelImport<R> {
     }
 
 
-    public ExcelImport<R> addConvertAndMustExist(String title, BiConsumer<R, String> setter) throws IOException {
+    public ExcelImport<R> addConvertAndMustExist(String title, BiConsumer<R, String> setter) {
         mustExistTitles.add(title);
         addConvertAndMustExist(title, x -> x, setter);
         return this;
     }
 
-    public <T> ExcelImport<R> addConvertAndMustExist(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) throws IOException {
+    public <T> ExcelImport<R> addConvertAndMustExist(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
         mustExistTitles.add(title);
         this.addConvert(title, convert, setter);
         return this;
     }
 
-    public List<R> readAndSkipConvertFailRow(){
-        return readAsList(false);
+    public List<R> readAndFilterFail() {
+        // 读取Excel中的对象, 如果转换失败的行,则从List中剔除
+        return readAll(false);
     }
 
-    public List<R> read(){
-        return readAsList(true);
+    public List<R> read() {
+        // 读取Excel中的对象, 如果存在任何一行转换失败,则返回空List
+        return readAll(true);
     }
 
-    private List<R> readAsList(boolean mustAllSuccess) {
+    private List<R> readAll(boolean mustAllConvertSuccess) {
         /*是否存在检测不通过的情况*/
         boolean existsCheckFail = false;
         rows = currentReader.readAll();
@@ -118,38 +123,34 @@ public class ExcelImport<R> {
             try {
                 rowCheckMustExist(row);
                 rowConvert(row);
-                row.put(RESULT_TITLE, getConvertSuccessMsg());
-            } catch (MyException e) {
+                row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
+            } catch (Exception e) {
                 existsCheckFail = true;
                 row.put(RESULT_TITLE, e.getMessage());
                 object2Row.remove(currentObject);
             }
         }
-        if (existsCheckFail && mustAllSuccess) {
+        if (existsCheckFail && mustAllConvertSuccess) {
             return Collections.EMPTY_LIST;
         }
         return new ArrayList<R>(object2Row.keySet());
-
     }
 
 
     /* 读取 */
-    public void wtxSimpleRead(HttpServletResponse response, ExConsumer<R> insert) throws IOException {
+    public void readAndResponse(HttpServletResponse response, Consumer<R> rowConsumer) throws IOException {
         List<R> read = read();
         for (R row : read) {
             try {
-                insert.accept(row);
-                this.setResult(row, getInsertSuccessMsg());
-            } catch (MyException e) {
-                this.setResult(row, e.getMessage());
+                rowConsumer.accept(row);
+                this.setResult(row, IMPORT_SUCCESS_MSG);
             } catch (Exception e) {
-                log.error("导入失败!", e);
-                this.setResult(row, getErrorMsg());
+                log.error(ERROR_MSG, e);
+                this.setResult(row, ERROR_MSG);
             }
         }
         this.response(response);
     }
-
 
     public void response(HttpServletResponse response) throws IOException {
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
@@ -173,7 +174,7 @@ public class ExcelImport<R> {
 
 
     /*行数据转换*/
-    private void rowConvert(Map<String, Object> row) throws MyException {
+    private void rowConvert(Map<String, Object> row) throws Exception {
 
         /*执行convert*/
         for (Map.Entry<String, Object> entry : row.entrySet()) {
@@ -181,53 +182,24 @@ public class ExcelImport<R> {
             if (skipEmptyTitles.contains(entry.getKey()) && StrUtil.isBlank(value)) {
                 continue;
             }
-            try {
-                Object convertValue = converts.get(entry.getKey()).apply(value);
-                consumers.get(entry.getKey()).accept(currentObject, convertValue);
-            } catch (MyException e) {
-                throw e;
-            } catch (Exception e) {
-                e.printStackTrace();
-                log.error("导入文件发生错误!", e);
-                throw new MyException(getErrorMsg());
-            }
+            Object convertValue = converts.get(entry.getKey()).apply(value);
+            consumers.get(entry.getKey()).accept(currentObject, convertValue);
         }
-
     }
 
     /*校验必填项*/
-    private void rowCheckMustExist(Map<String, Object> row) throws MyException {
+    private void rowCheckMustExist(Map<String, Object> row) throws ExcelReadException {
 
         /*检查必填项*/
         for (String key : row.keySet()) {
             if (mustExistTitles.contains(key)) {
                 Object str = row.get(key);
                 if (str == null || StrUtil.isBlank((String) str)) {
-                    throw new MyException(getNonNullMsg(key));
+                    throw new ExcelReadException(key + "为必填项!");
                 }
             }
         }
     }
 
-    /*必填项没有填写时的提示信息*/
-    private static String getNonNullMsg(String keyName) {
-        return "[" + keyName + "]" + "为必填项!";
-    }
-
-
-    /*校验成功的提示信息*/
-    private static String getConvertSuccessMsg() {
-        return "格式验证通过!";
-    }
-
-    /*导入失败的提示信息*/
-    private static String getErrorMsg() {
-        return "未知导入异常!请联系管理员!";
-    }
-
-    /*校验成功的提示信息*/
-    private static String getInsertSuccessMsg() {
-        return "导入成功!";
-    }
 
 }

@@ -1,21 +1,17 @@
 package cn.jy.excelUtils;
 
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.lang.UUID;
-import cn.hutool.core.thread.ThreadFactoryBuilder;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.BigExcelWriter;
 import cn.hutool.poi.excel.ExcelUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.util.ResourceUtils;
+import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
@@ -23,7 +19,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -34,20 +29,17 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ExcelExport<R> {
 
-    /*临时文件目录*/
-    private static volatile String applicationParentFilePath;
-    private static final ReentrantLock reentrantLock = new ReentrantLock();
+
+
     private List<Title<R>> titles = new ArrayList<>();
 
     /*一个延迟任务线程池*/
-    private static ScheduledThreadPoolExecutor cleanTempFileExecutorService;
-    private static ThreadFactory threadFactory =  ThreadFactoryBuilder
-            .create()
-            .setNamePrefix("export-clean-temp-file-thread")
-            .build();
+    private static ScheduledThreadPoolExecutor excelCleanExecutorService;
+    private static ThreadFactory threadFactory;
 
     static {
-        cleanTempFileExecutorService = new ScheduledThreadPoolExecutor(
+        threadFactory = new CustomizableThreadFactory("excel-clean-thread");
+        excelCleanExecutorService = new ScheduledThreadPoolExecutor(
                 1,
                 threadFactory,
                 new ThreadPoolExecutor.AbortPolicy());
@@ -56,7 +48,7 @@ public class ExcelExport<R> {
     /**
      * 打印调试内容
      */
-    private boolean showDebuggerDetail = false;
+    private boolean debugger = false;
     /* 多级表头时会用到 全局标题深度  initTitle方法会给其赋值
      *
      *   |       title               |     深度=3    rowIndex=0
@@ -104,7 +96,7 @@ public class ExcelExport<R> {
     }
 
     public void debug() {
-        this.showDebuggerDetail = true;
+        this.debugger = true;
     }
 
     /**
@@ -217,7 +209,7 @@ public class ExcelExport<R> {
                 .map(x -> StrUtil.count(x.titleName, Title.PARENT_TITLE_SEPARATOR) + 1)
                 .max(Comparator.naturalOrder())
                 .orElse(1);
-        if (showDebuggerDetail) {
+        if (debugger) {
             System.out.println("[Excel构建] 表头深度获取成功! 表头最大深度为" + this.MAX_TITLE_DEPTH);
         }
 
@@ -261,18 +253,18 @@ public class ExcelExport<R> {
                         int startColIndex = list.stream().map(x -> x.startColIndex).min(Comparator.naturalOrder()).orElse(1);
                         int endColIndex = list.stream().map(x -> x.endColIndex).max(Comparator.naturalOrder()).orElse(1);
                         if (startColIndex == endColIndex) {
-                            if (showDebuggerDetail) {
+                            if (debugger) {
                                 System.out.println("[Excel构建] 插入表头" + list.get(0).titleName);
                             }
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellValue(list.get(0).titleName);
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellStyle(this.getBigExcelWriter().getHeadCellStyle());
                             return;
                         }
-                        if (showDebuggerDetail) {
+                        if (debugger) {
                             System.out.println("[Excel构建] 插入表头并横向合并" + list.get(0).titleName + "  预计合并格数" + (endColIndex - startColIndex));
                         }
                         this.getBigExcelWriter().merge(rowsIndex, rowsIndex, startColIndex, endColIndex, list.get(0).titleName, true);
-                        if (showDebuggerDetail) {
+                        if (debugger) {
                             System.out.println("[Excel构建] 横向合并表头" + list.get(0).titleName + "完毕");
                         }
                     });
@@ -289,7 +281,7 @@ public class ExcelExport<R> {
                     /*发现重复的单元格,不会马上合并 因为可能有更多重复的*/
                     sameCount++;
                 } else if (sameCount != 0) {
-                    if (showDebuggerDetail) {
+                    if (debugger) {
                         System.out.println("[Excel构建] 表头纵向合并" + title.titleName + "  预计合并格数" + sameCount);
                     }
                     /*合并单元格*/
@@ -333,7 +325,7 @@ public class ExcelExport<R> {
         InputStream fileInputStream = null;
         try {
             out = response.getOutputStream();
-            fileInputStream = FileUtil.getInputStream(getAbsoluteFilePath(uniqueName));
+            fileInputStream = FileUtil.getInputStream(PathFinder.getAbsoluteFilePath(uniqueName));
             byte[] b = new byte[4096];  //创建数据缓冲区  通常网络2-8K 磁盘32K-64K
             int length;
             while ((length = fileInputStream.read(b)) > 0) {
@@ -359,27 +351,11 @@ public class ExcelExport<R> {
 
     private BigExcelWriter getBigExcelWriter() {
         if (bigExcelWriter == null) {
-            bigExcelWriter = ExcelUtil.getBigWriter(getAbsoluteFilePath(uniqueName));
+            bigExcelWriter = ExcelUtil.getBigWriter(PathFinder.getAbsoluteFilePath(uniqueName));
         }
         return bigExcelWriter;
     }
 
-    /*获取项目路径*/
-    private static String getApplicationParentFilePath() {
-        if (applicationParentFilePath == null) {
-            reentrantLock.lock();
-            try {
-                if (applicationParentFilePath == null) {
-                    applicationParentFilePath = new File(ResourceUtils.getURL("classpath:").getPath()).getParentFile().getParentFile().getParent();
-                }
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            } finally {
-                reentrantLock.unlock();
-            }
-        }
-        return applicationParentFilePath;
-    }
 
     /**
      * 清理临时文件
@@ -388,22 +364,15 @@ public class ExcelExport<R> {
      * @throws IOException
      */
     private static void cleanTempFile(String uniqueName) {
-        cleanTempFileExecutorService.schedule(() -> {
-            if (FileUtil.del(getAbsoluteFilePath(uniqueName))) {
-                log.warn("清理临时文件失败! 路径:" + getAbsoluteFilePath(uniqueName));
+        excelCleanExecutorService.schedule(() -> {
+            if (FileUtil.del(PathFinder.getAbsoluteFilePath(uniqueName))) {
+                log.warn("清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(uniqueName));
             }
         }, 1, TimeUnit.MINUTES);
     }
 
-    /**
-     * 获取文件绝对路径
-     *
-     * @param uniqueName
-     * @return
-     */
-    private static String getAbsoluteFilePath(String uniqueName) {
-        return getApplicationParentFilePath() + File.separator + "temp_files" + File.separator + DateUtil.format(new Date(), "yyyy-MM-dd") + File.separator + uniqueName + ".xlsx";
-    }
+
+
 
     /**
      * 获取行坐标   如果最大深度为4  当前深度为1  则处于第4行
