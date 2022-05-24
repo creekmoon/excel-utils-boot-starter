@@ -29,8 +29,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ExcelExport<R> {
 
-
-
     private List<Title<R>> titles = new ArrayList<>();
 
     /*一个延迟任务线程池*/
