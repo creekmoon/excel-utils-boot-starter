@@ -4,6 +4,7 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
+import cn.jy.excelUtils.exception.GlobalExceptionManager;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.springframework.web.multipart.MultipartFile;
@@ -126,7 +127,7 @@ public class ExcelImport<R> {
                 row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
             } catch (Exception e) {
                 existsCheckFail = true;
-                row.put(RESULT_TITLE, e.getMessage());
+                row.put(RESULT_TITLE, GlobalExceptionManager.getExceptionMsg(e));
                 object2Row.remove(currentObject);
             }
         }
@@ -138,7 +139,7 @@ public class ExcelImport<R> {
 
 
     /* 读取 */
-    public void readAndResponse(HttpServletResponse response, Consumer<R> rowConsumer) throws IOException {
+    public void readAndResponse(HttpServletResponse response, ExConsumer<R> rowConsumer) throws IOException {
         List<R> read = read();
         for (R row : read) {
             try {
@@ -146,7 +147,7 @@ public class ExcelImport<R> {
                 this.setResult(row, IMPORT_SUCCESS_MSG);
             } catch (Exception e) {
                 log.error(ERROR_MSG, e);
-                this.setResult(row, ERROR_MSG);
+                this.setResult(row, GlobalExceptionManager.getExceptionMsg(e));
             }
         }
         this.response(response);

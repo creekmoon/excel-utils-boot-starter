@@ -11,4 +11,13 @@ public interface ExceptionHandler {
      * @return   返回错误信息
      */
     String customExceptionMessage(Exception unCatchException);
+
+
+    /**
+     * 等级越高 优先级越高
+     * @return
+     */
+    default Integer getLevel(){
+        return 0;
+    };
 }

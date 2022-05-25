@@ -11,8 +11,8 @@ public class GlobalExceptionManager {
     public static List<ExceptionHandler> exceptionHandlers = new ArrayList<>();
 
     public static String getExceptionMsg(Exception unCatchException) {
-        for (int i = 0; i < exceptionHandlers.size(); i++) {
-            String msg = exceptionHandlers.get(i).customExceptionMessage(unCatchException);
+        for (ExceptionHandler exceptionHandler : exceptionHandlers) {
+            String msg = exceptionHandler.customExceptionMessage(unCatchException);
             if (msg != null) {
                 return msg;
             }
