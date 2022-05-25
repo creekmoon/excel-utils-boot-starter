@@ -1,4 +1,4 @@
-package cn.jy.excelUtils;
+package cn.jy.excelUtils.core;
 
 /**
  * Excel常量

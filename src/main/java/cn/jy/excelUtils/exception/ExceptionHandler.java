@@ -1,9 +1,9 @@
-package cn.jy.excelUtils;
+package cn.jy.excelUtils.exception;
 
 /**
- * 未捕获异常处理器
+ * 异常处理器
  */
-public interface UnCatchExceptionHandler {
+public interface ExceptionHandler {
 
     /**
      * 自定义异常结果
