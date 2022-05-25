@@ -6,9 +6,9 @@ package cn.jy.excelUtils;
 public interface UnCatchExceptionHandler {
 
     /**
-     * 获取异常信息内容
+     * 自定义异常结果
      * @param unCatchException 未捕获的异常
      * @return   返回错误信息
      */
-    String exception2Message(Exception unCatchException);
+    String customExceptionMessage(Exception unCatchException);
 }
