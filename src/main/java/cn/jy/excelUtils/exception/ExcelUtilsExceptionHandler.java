@@ -1,9 +1,11 @@
 package cn.jy.excelUtils.exception;
 
+import org.springframework.core.Ordered;
+
 /**
  * 异常处理器
  */
-public interface ExceptionHandler {
+public interface ExcelUtilsExceptionHandler extends Ordered {
 
     /**
      * 自定义异常结果
@@ -14,10 +16,10 @@ public interface ExceptionHandler {
 
 
     /**
-     * 等级越高 优先级越高
+     * 顺序 越低越先执行
      * @return
      */
-    default Integer getLevel(){
+    default int getOrder(){
         return 0;
     };
 }

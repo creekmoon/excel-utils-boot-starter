@@ -2,6 +2,7 @@ package cn.jy.excelUtils.exception;
 
 import cn.jy.excelUtils.core.ExcelConstants;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.support.SpringFactoriesLoader;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -13,13 +14,11 @@ import java.util.List;
 @Slf4j
 public class GlobalExceptionManager {
 
-    public static List<ExceptionHandler> exceptionHandlers = new ArrayList<>();
-    static {
-        addExceptionHandler(new DefaultExceptionHandler());
-    }
+    public static List<ExcelUtilsExceptionHandler> excelUtilsExceptionHandlers = new ArrayList<>();
+
     public static String getExceptionMsg(Exception unCatchException) {
-        for (ExceptionHandler exceptionHandler : exceptionHandlers) {
-            String msg = exceptionHandler.customExceptionMessage(unCatchException);
+        for (ExcelUtilsExceptionHandler excelUtilsExceptionHandler : excelUtilsExceptionHandlers) {
+            String msg = excelUtilsExceptionHandler.customExceptionMessage(unCatchException);
             if (msg != null) {
                 return msg;
             }
@@ -28,9 +27,9 @@ public class GlobalExceptionManager {
         return ExcelConstants.ERROR_MSG;
     }
 
-    public static void addExceptionHandler(ExceptionHandler handler) {
-        exceptionHandlers.add(handler);
-        /*按等级从大到小排序*/
-        exceptionHandlers.sort(Comparator.comparing(ExceptionHandler::getLevel).reversed());
+    public static void addExceptionHandler(ExcelUtilsExceptionHandler handler) {
+        excelUtilsExceptionHandlers.add(handler);
+        /*按优先级排序*/
+        excelUtilsExceptionHandlers.sort(Comparator.comparing(ExcelUtilsExceptionHandler::getOrder));
     }
 }

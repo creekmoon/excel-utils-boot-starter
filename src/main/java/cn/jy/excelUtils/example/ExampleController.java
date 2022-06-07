@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 
-@RestController
+@RestController("/test")
 public class ExampleController  {
 
 

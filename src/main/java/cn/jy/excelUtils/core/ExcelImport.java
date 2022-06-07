@@ -4,6 +4,7 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
+import cn.jy.excelUtils.exception.CheckedExcelException;
 import cn.jy.excelUtils.exception.GlobalExceptionManager;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -189,14 +190,14 @@ public class ExcelImport<R> {
     }
 
     /*校验必填项*/
-    private void rowCheckMustExist(Map<String, Object> row) throws ExcelReadException {
+    private void rowCheckMustExist(Map<String, Object> row) throws CheckedExcelException {
 
         /*检查必填项*/
         for (String key : row.keySet()) {
             if (mustExistTitles.contains(key)) {
                 Object str = row.get(key);
                 if (str == null || StrUtil.isBlank((String) str)) {
-                    throw new ExcelReadException(key + "为必填项!");
+                    throw new CheckedExcelException(key + "为必填项!");
                 }
             }
         }

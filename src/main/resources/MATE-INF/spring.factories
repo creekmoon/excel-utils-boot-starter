@@ -1,0 +1,6 @@
+#默认异常处理器
+cn.jy.excelUtils.exception.ExcelUtilsExceptionHandler=\
+cn.jy.excelUtils.exception.DefaultExcelUtilsExceptionHandler
+
+#自动配置类
+cn.jy.excelUtils.exception.ExcelUtilsAutoConfigure
