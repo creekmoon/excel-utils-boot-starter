@@ -104,10 +104,26 @@ public class ExcelImport<R> {
         return this;
     }
 
+    public ExcelImport<R> read(ExConsumer<R> dataConsumer) {
+        return read(ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL, dataConsumer);
+    }
+
+    public ExcelImport<R> read(ReadStrategy readStrategy, ExConsumer<R> dataConsumer) {
+        List<R> read = read(readStrategy);
+        for (int i = 0; i < read.size(); i++) {
+            try {
+                dataConsumer.accept(read.get(i));
+                setResult(read.get(i), IMPORT_SUCCESS_MSG);
+            } catch (Exception e) {
+                setResult(read.get(i), GlobalExceptionManager.getExceptionMsg(e));
+            }
+        }
+        return this;
+    }
 
     public List<R> read() {
         // 读取Excel中的对象, 如果存在任何一行转换失败,则返回空List
-        return read(ReadStrategy.RETURN_EMPTY_ON_FAIL);
+        return read(ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL);
     }
 
     public List<R> read(ReadStrategy readStrategy) {
@@ -128,11 +144,11 @@ public class ExcelImport<R> {
             }
         }
         /*如果读取策略为RETURN_EMPTY_ON_FAIL*/
-        if (readStrategy == ReadStrategy.RETURN_EMPTY_ON_FAIL) {
+        if (readStrategy == ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL) {
             return existsFail ? Collections.EMPTY_LIST : new ArrayList<R>(object2Row.keySet());
         }
         /*如果读取策略为CONTINUE_ON_FAIL*/
-        if (readStrategy == ReadStrategy.CONTINUE_ON_FAIL) {
+        if (readStrategy == ReadStrategy.RETURN_SUCCESS_LIST_IF_EXIST_FAIL) {
             return new ArrayList<R>(object2Row.keySet());
         }
         throw new RuntimeException("读取文档时发生错误,未定义读取策略ReadStrategy");
@@ -209,8 +225,8 @@ public class ExcelImport<R> {
      */
     public enum ReadStrategy {
         /*遇到失败时返回空行*/
-        RETURN_EMPTY_ON_FAIL,
-        /*遇到失败时跳过异常的行 并返回剩余成功的行*/
-        CONTINUE_ON_FAIL;
+        RETURN_EMPTY_LIST_IF_EXIST_FAIL,
+        /*遇到失败时跳过异常的行 并返回成功的行*/
+        RETURN_SUCCESS_LIST_IF_EXIST_FAIL;
     }
 }

@@ -2,6 +2,7 @@ package cn.jy.excelUtils.exception;
 
 import cn.jy.excelUtils.core.ExcelConstants;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.Ordered;
 import org.springframework.core.io.support.SpringFactoriesLoader;
 
 import java.util.ArrayList;
@@ -16,6 +17,9 @@ public class GlobalExceptionManager {
 
     public static List<ExcelUtilsExceptionHandler> excelUtilsExceptionHandlers = new ArrayList<>();
 
+    static {
+        addExceptionHandler(new DefaultExcelUtilsExceptionHandler());
+    }
     public static String getExceptionMsg(Exception unCatchException) {
         for (ExcelUtilsExceptionHandler excelUtilsExceptionHandler : excelUtilsExceptionHandlers) {
             String msg = excelUtilsExceptionHandler.customExceptionMessage(unCatchException);
@@ -31,5 +35,21 @@ public class GlobalExceptionManager {
         excelUtilsExceptionHandlers.add(handler);
         /*按优先级排序*/
         excelUtilsExceptionHandlers.sort(Comparator.comparing(ExcelUtilsExceptionHandler::getOrder));
+    }
+
+    public static class DefaultExcelUtilsExceptionHandler implements ExcelUtilsExceptionHandler {
+        @Override
+        public String customExceptionMessage(Exception unCatchException) {
+            if (unCatchException instanceof CheckedExcelException) {
+                return unCatchException.getMessage();
+            }
+            //返回null说明不进行处理 将委托给其他处理器进行处理
+            return null;
+        }
+
+        @Override
+        public int getOrder() {
+            return Ordered.LOWEST_PRECEDENCE;
+        }
     }
 }

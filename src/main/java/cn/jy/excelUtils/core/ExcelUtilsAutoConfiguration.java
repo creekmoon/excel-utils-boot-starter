@@ -12,7 +12,7 @@ import java.util.Collection;
 import java.util.Comparator;
 
 @Configuration
-public class ExcelUtilsAutoConfigure implements ApplicationContextAware {
+public class ExcelUtilsAutoConfiguration implements ApplicationContextAware {
 
     ApplicationContext applicationContext;
 

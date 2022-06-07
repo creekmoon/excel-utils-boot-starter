@@ -133,7 +133,7 @@ public class ExcelExport<R> {
      * @return
      */
     public ExcelExport<R> write(List<R> data) {
-        return write(data, titles, WriteStrategy.CONTINUE_ON_NULL_POINTER_ERROR);
+        return write(data, titles, WriteStrategy.CONTINUE_ON_ERROR);
     }
 
     /**
@@ -181,7 +181,7 @@ public class ExcelExport<R> {
                                         try {
                                             data = title.valueFunction.apply(vo);
                                         } catch (Exception exception) {
-                                            if (exception instanceof NullPointerException && writeStrategy == WriteStrategy.CONTINUE_ON_NULL_POINTER_ERROR) {
+                                            if (writeStrategy == WriteStrategy.CONTINUE_ON_ERROR) {
                                                 // nothing to do
                                             }
                                             if (writeStrategy == WriteStrategy.STOP_ON_ERROR) {
@@ -483,9 +483,9 @@ public class ExcelExport<R> {
      * 写入策略
      */
     public enum WriteStrategy {
-        /*忽略空指针异常 通常是多级嵌套对象取不到值*/
-        CONTINUE_ON_NULL_POINTER_ERROR,
-        /*遇到任何失败的情况则*/
+        /*忽略取值异常 通常是多级属性空指针造成的 如果取不到值直接置为NULL*/
+        CONTINUE_ON_ERROR,
+        /*遇到任何失败的情况则停止*/
         STOP_ON_ERROR;
     }
 }
