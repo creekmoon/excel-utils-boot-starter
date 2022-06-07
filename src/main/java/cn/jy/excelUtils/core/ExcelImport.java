@@ -128,8 +128,8 @@ public class ExcelImport<R> {
             }
         }
         /*如果读取策略为RETURN_EMPTY_ON_FAIL*/
-        if (existsFail && readStrategy == ReadStrategy.RETURN_EMPTY_ON_FAIL) {
-            return Collections.EMPTY_LIST;
+        if (readStrategy == ReadStrategy.RETURN_EMPTY_ON_FAIL) {
+            return existsFail ? Collections.EMPTY_LIST : new ArrayList<R>(object2Row.keySet());
         }
         /*如果读取策略为CONTINUE_ON_FAIL*/
         if (readStrategy == ReadStrategy.CONTINUE_ON_FAIL) {
