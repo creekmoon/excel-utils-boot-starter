@@ -15,7 +15,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static cn.jy.excelUtils.core.ExcelConstants.*;
@@ -104,19 +103,15 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public List<R> readAndFilterFail() {
-        // 读取Excel中的对象, 如果转换失败的行,则从List中剔除
-        return readAll(false);
-    }
 
     public List<R> read() {
         // 读取Excel中的对象, 如果存在任何一行转换失败,则返回空List
-        return readAll(true);
+        return read(ReadStrategy.RETURN_EMPTY_ON_FAIL);
     }
 
-    private List<R> readAll(boolean mustAllConvertSuccess) {
-        /*是否存在检测不通过的情况*/
-        boolean existsCheckFail = false;
+    public List<R> read(ReadStrategy readStrategy) {
+        /*是否存在读取不通过的情况*/
+        boolean existsFail = false;
         rows = currentReader.readAll();
         for (Map<String, Object> row : rows) {
             currentObject = newObjectSupplier.get();
@@ -126,15 +121,20 @@ public class ExcelImport<R> {
                 rowConvert(row);
                 row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
             } catch (Exception e) {
-                existsCheckFail = true;
+                existsFail = true;
                 row.put(RESULT_TITLE, GlobalExceptionManager.getExceptionMsg(e));
                 object2Row.remove(currentObject);
             }
         }
-        if (existsCheckFail && mustAllConvertSuccess) {
+        /*如果读取策略为RETURN_EMPTY_ON_FAIL*/
+        if (existsFail && readStrategy == ReadStrategy.RETURN_EMPTY_ON_FAIL) {
             return Collections.EMPTY_LIST;
         }
-        return new ArrayList<R>(object2Row.keySet());
+        /*如果读取策略为CONTINUE_ON_FAIL*/
+        if (readStrategy == ReadStrategy.CONTINUE_ON_FAIL) {
+            return new ArrayList<R>(object2Row.keySet());
+        }
+        throw new RuntimeException("读取文档时发生错误,未定义读取策略ReadStrategy");
     }
 
 
@@ -203,4 +203,13 @@ public class ExcelImport<R> {
     }
 
 
+    /**
+     * 读取策略
+     */
+    public enum ReadStrategy {
+        /*遇到失败时返回空行*/
+        RETURN_EMPTY_ON_FAIL,
+        /*遇到失败时跳过异常的行 并返回剩余成功的行*/
+        CONTINUE_ON_FAIL;
+    }
 }

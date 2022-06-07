@@ -1,5 +1,8 @@
 package cn.jy.excelUtils.exception;
 
+import cn.jy.excelUtils.core.ExcelConstants;
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -7,6 +10,7 @@ import java.util.List;
 /**
  * 全局异常管理器
  */
+@Slf4j
 public class GlobalExceptionManager {
 
     public static List<ExceptionHandler> exceptionHandlers = new ArrayList<>();
@@ -20,7 +24,8 @@ public class GlobalExceptionManager {
                 return msg;
             }
         }
-        return null;
+        log.error("ExcelUtils组件遇到无法处理的异常!", unCatchException);
+        return ExcelConstants.ERROR_MSG;
     }
 
     public static void addExceptionHandler(ExceptionHandler handler) {

@@ -366,7 +366,7 @@ public class ExcelExport<R> {
             if (FileUtil.del(PathFinder.getAbsoluteFilePath(uniqueName))) {
                 log.warn("清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(uniqueName));
             }
-        }, 1, TimeUnit.MINUTES);
+        }, 5, TimeUnit.MINUTES);
     }
 
 
