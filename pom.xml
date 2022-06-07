@@ -6,7 +6,7 @@
 
     <groupId>io.github.yinjiangyue</groupId>
     <artifactId>excel-utils</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.1</version>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>

@@ -133,18 +133,19 @@ public class ExcelExport<R> {
      * @return
      */
     public ExcelExport<R> write(List<R> data) {
-        return write(data, titles, false);
+        return write(data, titles, WriteStrategy.CONTINUE_ON_NULL_POINTER_ERROR);
     }
 
     /**
-     * 写入对象 并忽略未捕获的getter异常
+     * 写入对象
      *
      * @param data
      * @return
      */
-    public ExcelExport<R> writeAndIgnoreValueGetterException(List<R> data) {
-        return write(data, titles, true);
+    public ExcelExport<R> write(List<R> data, WriteStrategy writeStrategy) {
+        return write(data, titles, writeStrategy);
     }
+
 
     /**
      * 以map形式写入
@@ -152,7 +153,7 @@ public class ExcelExport<R> {
      * @param data key=标题 value=行内容
      * @return
      */
-    public BigExcelWriter writeByMap(List<Map> data) {
+    protected BigExcelWriter writeByMap(List<Map> data) {
         getBigExcelWriter().write(data);
         return getBigExcelWriter();
     }
@@ -161,13 +162,13 @@ public class ExcelExport<R> {
     /**
      * 以对象形式写入
      *
-     * @param vos                               数据集
-     * @param titles                            标题映射关系
-     * @param ignoreValueGetterUnCatchException 忽略值的getter方法异常 通常是多层get导致空指针
+     * @param vos           数据集
+     * @param titles        标题映射关系
+     * @param writeStrategy 写入策略
      * @param <T>
      * @return
      */
-    private <T> ExcelExport<R> write(List<T> vos, List<Title<T>> titles, boolean ignoreValueGetterUnCatchException) {
+    private <T> ExcelExport<R> write(List<T> vos, List<Title<T>> titles, WriteStrategy writeStrategy) {
         this.initTitles();
         List<List<Object>> rows =
                 vos.stream()
@@ -175,16 +176,22 @@ public class ExcelExport<R> {
                                 vo -> {
                                     List<Object> row = new LinkedList<>();
                                     for (Title<T> title : titles) {
-                                        Object apply = null;
-                                        if (ignoreValueGetterUnCatchException) {
-                                            try {
-                                                apply = title.valueFunction.apply(vo);
-                                            } catch (Exception ignored) {
+                                        //当前行中的某个属性值
+                                        Object data = null;
+                                        try {
+                                            data = title.valueFunction.apply(vo);
+                                        } catch (Exception exception) {
+                                            if (exception instanceof NullPointerException && writeStrategy == WriteStrategy.CONTINUE_ON_NULL_POINTER_ERROR) {
+                                                // nothing to do
                                             }
-                                        } else {
-                                            apply = title.valueFunction.apply(vo);
+                                            if (writeStrategy == WriteStrategy.STOP_ON_ERROR) {
+                                                String uniqueName = stopWrite();
+                                                cleanTempFile(uniqueName);
+                                                log.error("生成Excel获取数据值时发生错误!", exception);
+                                                throw new RuntimeException("生成Excel获取数据值时发生错误!");
+                                            }
                                         }
-                                        row.add(apply);
+                                        row.add(data);
                                     }
                                     return row;
                                 })
@@ -370,8 +377,6 @@ public class ExcelExport<R> {
     }
 
 
-
-
     /**
      * 获取行坐标   如果最大深度为4  当前深度为1  则处于第4行
      *
@@ -471,7 +476,16 @@ public class ExcelExport<R> {
             }
             return depth2Title;
         }
+    }
 
 
+    /**
+     * 写入策略
+     */
+    public enum WriteStrategy {
+        /*忽略空指针异常 通常是多级嵌套对象取不到值*/
+        CONTINUE_ON_NULL_POINTER_ERROR,
+        /*遇到任何失败的情况则*/
+        STOP_ON_ERROR;
     }
 }
