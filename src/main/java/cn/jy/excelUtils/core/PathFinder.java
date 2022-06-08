@@ -18,7 +18,7 @@ public class PathFinder {
     /**
      * 获取文件绝对路径
      *
-     * @param uniqueName
+     * @param uniqueName 唯一名称,写文件完成后会获得
      * @return
      */
     public static String getAbsoluteFilePath(String uniqueName) {

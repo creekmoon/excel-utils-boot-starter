@@ -319,18 +319,26 @@ public class ExcelExport<R> {
         }
     }
 
+    /**
+     * 返回Excel
+     *
+     * @param response          servlet请求
+     * @param filePath          本地文件路径
+     * @param responseExcelName 声明的文件名称,前端能看到 可以自己乱填
+     * @throws IOException
+     */
     /*回应请求*/
-    public static void response(HttpServletResponse response, String uniqueName, String excelName) throws IOException {
+    public static void response(HttpServletResponse response, String filePath, String responseExcelName) throws IOException {
         /*实际上是xlsx格式的文件  但以xls格式进行发送,好像也没什么问题*/
         response.setContentType("application/vnd.ms-excel;charset=utf-8");
-        response.setHeader("Content-Disposition", "attachment;filename=" + excelName + ".xls");
+        response.setHeader("Content-Disposition", "attachment;filename=" + responseExcelName + ".xls");
 
         /*使用流将文件传输回去*/
         ServletOutputStream out = null;
         InputStream fileInputStream = null;
         try {
             out = response.getOutputStream();
-            fileInputStream = FileUtil.getInputStream(PathFinder.getAbsoluteFilePath(uniqueName));
+            fileInputStream = FileUtil.getInputStream(filePath);
             byte[] b = new byte[4096];  //创建数据缓冲区  通常网络2-8K 磁盘32K-64K
             int length;
             while ((length = fileInputStream.read(b)) > 0) {
@@ -349,7 +357,7 @@ public class ExcelExport<R> {
     public void response(HttpServletResponse response) throws IOException {
         String uniqueName = this.stopWrite();
         try {
-            ExcelExport.response(response, uniqueName, excelName);
+            ExcelExport.response(response, PathFinder.getAbsoluteFilePath(uniqueName), excelName);
         } finally {
             /*清除临时文件*/
             cleanTempFile(uniqueName);
