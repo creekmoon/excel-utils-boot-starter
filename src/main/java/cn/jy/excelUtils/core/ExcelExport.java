@@ -319,7 +319,7 @@ public class ExcelExport<R> {
         }
     }
 
-    /*回应请求 这个步骤会将磁盘文件清空*/
+    /*回应请求*/
     public static void response(HttpServletResponse response, String uniqueName, String excelName) throws IOException {
         /*实际上是xlsx格式的文件  但以xls格式进行发送,好像也没什么问题*/
         response.setContentType("application/vnd.ms-excel;charset=utf-8");
@@ -341,8 +341,6 @@ public class ExcelExport<R> {
         } finally {
             IoUtil.close(fileInputStream);
             IoUtil.close(out);
-            /*清除临时文件*/
-            cleanTempFile(uniqueName);
         }
 
     }
@@ -350,7 +348,12 @@ public class ExcelExport<R> {
     /*将文件响应给请求*/
     public void response(HttpServletResponse response) throws IOException {
         String uniqueName = this.stopWrite();
-        ExcelExport.response(response, uniqueName, excelName);
+        try {
+            ExcelExport.response(response, uniqueName, excelName);
+        } finally {
+            /*清除临时文件*/
+            cleanTempFile(uniqueName);
+        }
     }
 
 
