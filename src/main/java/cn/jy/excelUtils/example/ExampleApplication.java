@@ -13,15 +13,11 @@ import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.servlet.server.ConfigurableServletWebServerFactory;
 
 @SpringBootApplication()
-public class ExampleApplication  implements WebServerFactoryCustomizer<ConfigurableServletWebServerFactory> {
+public class ExampleApplication   {
 
     public static void main(String[] args) {
         SpringApplication.run(ExampleApplication.class, args);
     }
 
 
-    @Override
-    public void customize(ConfigurableServletWebServerFactory factory) {
-        factory.setPort(13555);
-    }
 }

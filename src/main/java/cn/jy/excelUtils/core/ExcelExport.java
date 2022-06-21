@@ -331,7 +331,7 @@ public class ExcelExport<R> {
     public static void response(HttpServletResponse response, String filePath, String responseExcelName) throws IOException {
         /*实际上是xlsx格式的文件  但以xls格式进行发送,好像也没什么问题*/
         response.setContentType("application/vnd.ms-excel;charset=utf-8");
-        response.setHeader("Content-Disposition", "attachment;filename=" + responseExcelName + ".xls");
+        response.setHeader("Content-Disposition", "attachment;filename=" + responseExcelName + ".xlsx");
 
         /*使用流将文件传输回去*/
         ServletOutputStream out = null;

@@ -4,6 +4,8 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
+import cn.hutool.poi.excel.sax.Excel07SaxReader;
+import cn.hutool.poi.excel.sax.handler.RowHandler;
 import cn.jy.excelUtils.exception.CheckedExcelException;
 import cn.jy.excelUtils.exception.GlobalExceptionManager;
 import lombok.extern.slf4j.Slf4j;
@@ -27,10 +29,17 @@ import static cn.jy.excelUtils.core.ExcelConstants.*;
 @Slf4j
 public class ExcelImport<R> {
     public static final String RESULT_TITLE = "导入结果";
+    /**
+     * 默认读取器-基于内存
+     */
     private ExcelReader currentReader;
+    /**
+     * Sax读取器-基于流
+     */
+    private Excel07SaxReader currentSaxReader;
     /* key=title  value=执行器 */
-    private Map<String, ExFunction> converts = new HashMap(32);
-    private Map<String, BiConsumer> consumers = new HashMap(32);
+    private Map<String, ExFunction> converts = new LinkedHashMap(32);
+    private Map<String, BiConsumer> consumers = new LinkedHashMap(32);
     /* key=title */
     private Set<String> mustExistTitles = new HashSet<>(32);
     private Set<String> skipEmptyTitles = new HashSet<>(32);
@@ -40,6 +49,8 @@ public class ExcelImport<R> {
     private Map<R, Map<String, Object>> object2Row = new LinkedHashMap<>(32);
 
     private Supplier<R> newObjectSupplier;
+    /*当前导入的文件*/
+    private MultipartFile file;
     public R currentObject;
 
 
@@ -47,24 +58,110 @@ public class ExcelImport<R> {
     }
 
 
-    public static <T> ExcelImport<T> create(MultipartFile file, Supplier<T> supplier) throws IOException {
+    public static <T> ExcelImport<T> create(MultipartFile file, Supplier<T> supplier) {
         ExcelImport<T> excelImport = new ExcelImport();
         excelImport.newObjectSupplier = supplier;
-        excelImport.currentReader = ExcelUtil.getReader(file.getInputStream());
-        /*格式化器 将一切结果都转为String*/
-        excelImport.currentReader.setCellEditor((Cell cell, Object value) -> {
-            if (value == null) {
-                return "";
-            }
-            if (value instanceof String) {
-                return StrUtil.trim((String) value);
-            }
-            if (value instanceof Date) {
-                return DateUtil.format((Date) value, "yyyy-MM-dd HH:mm:ss");
-            }
-            return String.valueOf(value);
-        });
+        excelImport.file = file;
         return excelImport;
+    }
+
+
+    /**
+     * 初始化内存读取器
+     * 将所有的数据读取至内存
+     *
+     * @throws IOException
+     */
+    private void initMemoryReader() throws IOException {
+        if (this.currentReader != null) {
+            return;
+        }
+        this.currentReader = ExcelUtil.getReader(file.getInputStream());
+        /*格式化器 将一切结果都转为String*/
+        this.currentReader.setCellEditor((Cell cell, Object value) -> object2String(value));
+    }
+
+
+    /**
+     * 全局默认数据转换器 将所有的数值都转换成String
+     *
+     * @param value
+     * @return
+     */
+    private String object2String(Object value) {
+        if (value == null) {
+            return "";
+        }
+        if (value instanceof String) {
+            return StrUtil.trim((String) value);
+        }
+        if (value instanceof Date) {
+            return DateUtil.format((Date) value, "yyyy-MM-dd HH:mm:ss");
+        }
+        return String.valueOf(value);
+    }
+
+    /**
+     * 初始化内存读取器
+     * 将所有的数据读取至内存
+     *
+     * @throws IOException
+     */
+    private SaxReaderStatus initSaxReader(ExConsumer<R> dataConsumer) {
+
+        SaxReaderStatus saxReaderStatus = new SaxReaderStatus();
+        if (this.currentSaxReader != null) {
+            return saxReaderStatus;
+        }
+        /*转换器队列 按下标而不是按K-V形式*/
+        ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
+        /*转换器队列 按下标而不是按K-V形式*/
+        ArrayList<BiConsumer> consumerList = new ArrayList<>(consumers.values());
+        this.currentSaxReader = new Excel07SaxReader(new RowHandler() {
+            @Override
+            public void handle(int sheetIndex, int rowIndex, List<Object> rowList) {
+                /*只读取第一个sheet*/
+                if (sheetIndex != 0) {
+                    return;
+                }
+                /*跳过第一行*/
+                if (rowIndex == 0) {
+                    return;
+                }
+                R rowData = newObjectSupplier.get();
+                /*将当前行转为对象*/
+                for (int colIndex = 0; colIndex < convertsList.size(); colIndex++) {
+                    /*先把所有读到的数据转为String*/
+                    String value = object2String(rowList.get(colIndex));
+                    /*获取当前的转换器*/
+                    ExFunction converter = convertsList.get(colIndex);
+                    BiConsumer setter = consumerList.get(colIndex);
+
+                    Object apply = null;
+                    try {
+                        apply = converter.apply(value);
+                        setter.accept(rowData, apply);
+                    } catch (Exception e) {
+                        String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
+                        saxReaderStatus.getErrorReport().put(rowIndex, exceptionMsg);
+                    }
+                }
+                /*消费这个对象 通常就是insert*/
+                try {
+                    dataConsumer.accept(rowData);
+                    saxReaderStatus.successRowIndex++;
+                } catch (Exception e) {
+                    String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
+                    saxReaderStatus.getErrorReport().put(rowIndex, exceptionMsg);
+                }
+                /*如果异常数量达到100 直接中断本次导入*/
+                if (saxReaderStatus.getErrorReport().size() >= 100) {
+                    throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件格式");
+                }
+                //Console.log("[{}] [{}] {}", sheetIndex, rowIndex, rowList);
+            }
+        });
+        return saxReaderStatus;
     }
 
     public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
@@ -104,11 +201,25 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public ExcelImport<R> read(ExConsumer<R> dataConsumer) {
+    /**
+     * SAX方式读取
+     */
+    public SaxReaderStatus saxRead(ExConsumer<R> dataConsumer) throws IOException {
+        SaxReaderStatus saxReaderStatus = initSaxReader(dataConsumer);
+        try {
+            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
+            this.currentSaxReader.read(file.getInputStream(), -1);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return saxReaderStatus;
+    }
+
+    public ExcelImport<R> read(ExConsumer<R> dataConsumer) throws IOException {
         return read(dataConsumer, ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL);
     }
 
-    public ExcelImport<R> read(ExConsumer<R> dataConsumer, ReadStrategy readStrategy) {
+    public ExcelImport<R> read(ExConsumer<R> dataConsumer, ReadStrategy readStrategy) throws IOException {
         List<R> read = read(readStrategy);
         for (int i = 0; i < read.size(); i++) {
             try {
@@ -121,12 +232,14 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public List<R> read() {
+    public List<R> read() throws IOException {
         // 读取Excel中的对象, 如果存在任何一行转换失败,则返回空List
         return read(ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL);
     }
 
-    public List<R> read(ReadStrategy readStrategy) {
+    public List<R> read(ReadStrategy readStrategy) throws IOException {
+        /*初始化读取器*/
+        initMemoryReader();
         /*是否存在读取不通过的情况*/
         boolean existsFail = false;
         rows = currentReader.readAll();

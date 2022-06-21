@@ -1,7 +1,9 @@
 package cn.jy.excelUtils.example;
 
+import cn.hutool.core.date.DateUtil;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
+import cn.jy.excelUtils.core.SaxReaderStatus;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.servlet.server.ConfigurableServletWebServerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,16 +20,17 @@ import java.util.ArrayList;
 import java.util.Date;
 
 @RestController("/test")
-public class ExampleController  {
+public class ExampleController {
 
     /**
      * 导出
+     *
      * @param request
      * @param response
      * @throws IOException
      */
     @GetMapping(value = "/exportExcel")
-    public void exportExcel( HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void exportExcel(HttpServletRequest request, HttpServletResponse response) throws IOException {
         Student student = new Student();
         student.setAge(15);
         student.setBirthday(new Date());
@@ -41,11 +44,11 @@ public class ExampleController  {
         result.add(student);
         result.add(student);
         result.add(student);
-        ExcelExport.create("lalala",Student.class)
-                .addTitle("学生::姓名",Student::getUserName)
-                .addTitle("学生::年龄",Student::getAge)
-                .addTitle("学生::邮箱",Student::getEmail)
-                .addTitle("过期时间",Student::getExpTime)
+        ExcelExport.create("lalala", Student.class)
+                .addTitle("学生::姓名", Student::getUserName)
+                .addTitle("学生::年龄", Student::getAge)
+                .addTitle("学生::邮箱", Student::getEmail)
+                .addTitle("过期时间", Student::getExpTime)
                 .write(result)
                 .write(result)
                 .write(result)
@@ -56,6 +59,7 @@ public class ExampleController  {
 
     /**
      * 导入
+     *
      * @param request
      * @param response
      * @throws IOException
@@ -65,6 +69,10 @@ public class ExampleController  {
         ExcelImport.create(file, Student::new)
                 .addConvert("姓名", Student::setUserName)
                 .addConvert("年龄", Integer::valueOf, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("过期时间", x->{
+                        return DateUtil.parse(x.substring(0, 10));
+                    }, Student::setBirthday)
                 .read(student -> {
                     System.out.println(student);
                 })
@@ -72,4 +80,23 @@ public class ExampleController  {
 
     }
 
+    /**
+     * 导入
+     *
+     * @param request
+     * @param response
+     * @throws IOException
+     */
+    @PostMapping(value = "/importExcelSax")
+    public void importExcelSax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        SaxReaderStatus saxReaderStatus = ExcelImport.create(file, Student::new)
+                .addConvert("姓名", Student::setUserName)
+                .addConvert("年龄", Integer::valueOf, Student::setAge)
+                .saxRead(
+                        student -> {
+                            System.out.println(student);
+                        });
+        System.out.println(saxReaderStatus);
+
+    }
 }
