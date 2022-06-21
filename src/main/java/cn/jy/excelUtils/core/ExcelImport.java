@@ -105,10 +105,10 @@ public class ExcelImport<R> {
     }
 
     public ExcelImport<R> read(ExConsumer<R> dataConsumer) {
-        return read(ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL, dataConsumer);
+        return read(dataConsumer, ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL);
     }
 
-    public ExcelImport<R> read(ReadStrategy readStrategy, ExConsumer<R> dataConsumer) {
+    public ExcelImport<R> read(ExConsumer<R> dataConsumer, ReadStrategy readStrategy) {
         List<R> read = read(readStrategy);
         for (int i = 0; i < read.size(); i++) {
             try {
