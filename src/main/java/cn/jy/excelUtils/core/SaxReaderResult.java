@@ -10,7 +10,7 @@ import java.util.Map;
  * sax模式读取状态
  */
 @Data
-public class SaxReaderStatus {
+public class SaxReaderResult {
 
     /*成功读取并消费的行号*/
     int successRowIndex = 0;

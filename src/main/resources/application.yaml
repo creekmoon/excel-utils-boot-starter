@@ -1,2 +1,7 @@
 server:
   port: 13555
+Spring:
+  servlet:
+    multipart:
+      max-file-size: 30MB
+      max-request-size: 50MB

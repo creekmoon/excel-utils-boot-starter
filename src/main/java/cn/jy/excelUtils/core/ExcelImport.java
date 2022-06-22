@@ -107,11 +107,11 @@ public class ExcelImport<R> {
      *
      * @throws IOException
      */
-    private SaxReaderStatus initSaxReader(ExConsumer<R> dataConsumer) {
+    private SaxReaderResult initSaxReader(ExConsumer<R> dataConsumer) {
 
-        SaxReaderStatus saxReaderStatus = new SaxReaderStatus();
+        SaxReaderResult saxReaderResult = new SaxReaderResult();
         if (this.currentSaxReader != null) {
-            return saxReaderStatus;
+            return saxReaderResult;
         }
         /*转换器队列 按下标而不是按K-V形式*/
         ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
@@ -143,25 +143,25 @@ public class ExcelImport<R> {
                         setter.accept(rowData, apply);
                     } catch (Exception e) {
                         String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                        saxReaderStatus.getErrorReport().put(rowIndex, exceptionMsg);
+                        saxReaderResult.getErrorReport().put(rowIndex, exceptionMsg);
                     }
                 }
                 /*消费这个对象 通常就是insert*/
                 try {
                     dataConsumer.accept(rowData);
-                    saxReaderStatus.successRowIndex++;
+                    saxReaderResult.successRowIndex++;
                 } catch (Exception e) {
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                    saxReaderStatus.getErrorReport().put(rowIndex, exceptionMsg);
+                    saxReaderResult.getErrorReport().put(rowIndex, exceptionMsg);
                 }
                 /*如果异常数量达到100 直接中断本次导入*/
-                if (saxReaderStatus.getErrorReport().size() >= 100) {
+                if (saxReaderResult.getErrorReport().size() >= 100) {
                     throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件格式");
                 }
                 //Console.log("[{}] [{}] {}", sheetIndex, rowIndex, rowList);
             }
         });
-        return saxReaderStatus;
+        return saxReaderResult;
     }
 
     public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
@@ -204,15 +204,15 @@ public class ExcelImport<R> {
     /**
      * SAX方式读取
      */
-    public SaxReaderStatus saxRead(ExConsumer<R> dataConsumer) throws IOException {
-        SaxReaderStatus saxReaderStatus = initSaxReader(dataConsumer);
+    public SaxReaderResult saxRead(ExConsumer<R> dataConsumer) throws IOException {
+        SaxReaderResult saxReaderResult = initSaxReader(dataConsumer);
         try {
             /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
             this.currentSaxReader.read(file.getInputStream(), -1);
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return saxReaderStatus;
+        return saxReaderResult;
     }
 
     public ExcelImport<R> read(ExConsumer<R> dataConsumer) throws IOException {
