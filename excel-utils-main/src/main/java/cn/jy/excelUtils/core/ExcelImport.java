@@ -5,9 +5,9 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
-import cn.hutool.poi.excel.sax.handler.RowHandler;
 import cn.jy.excelUtils.exception.CheckedExcelException;
 import cn.jy.excelUtils.exception.GlobalExceptionManager;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +39,7 @@ public class ExcelImport<R> {
     private Excel07SaxReader currentSaxReader;
     /* key=title  value=执行器 */
     private Map<String, ExFunction> converts = new LinkedHashMap(32);
+    /* key=title value=消费者(通常是setter方法)*/
     private Map<String, BiConsumer> consumers = new LinkedHashMap(32);
     /* key=title */
     private Set<String> mustExistTitles = new HashSet<>(32);
@@ -102,8 +103,8 @@ public class ExcelImport<R> {
     }
 
     /**
-     * 初始化内存读取器
-     * 将所有的数据读取至内存
+     * 初始化SAX读取器
+     * 将所有的数据按行读取
      *
      * @throws IOException
      */
@@ -113,52 +114,48 @@ public class ExcelImport<R> {
         if (this.currentSaxReader != null) {
             return saxReaderResult;
         }
-        /*转换器队列 按下标而不是按K-V形式*/
+        /*转换器队列*/
         ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
-        /*转换器队列 按下标而不是按K-V形式*/
-        ArrayList<BiConsumer> consumerList = new ArrayList<>(consumers.values());
-        this.currentSaxReader = new Excel07SaxReader(new RowHandler() {
-            @Override
-            public void handle(int sheetIndex, int rowIndex, List<Object> rowList) {
-                /*只读取第一个sheet*/
-                if (sheetIndex != 0) {
-                    return;
-                }
-                /*跳过第一行*/
-                if (rowIndex == 0) {
-                    return;
-                }
-                R rowData = newObjectSupplier.get();
-                /*将当前行转为对象*/
-                for (int colIndex = 0; colIndex < convertsList.size(); colIndex++) {
-                    /*先把所有读到的数据转为String*/
-                    String value = object2String(rowList.get(colIndex));
-                    /*获取当前的转换器*/
-                    ExFunction converter = convertsList.get(colIndex);
-                    BiConsumer setter = consumerList.get(colIndex);
-
-                    Object apply = null;
-                    try {
-                        apply = converter.apply(value);
-                        setter.accept(rowData, apply);
-                    } catch (Exception e) {
-                        String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                        saxReaderResult.getErrorReport().put(rowIndex, exceptionMsg);
-                    }
-                }
-                /*消费这个对象 通常就是insert*/
+        /*setter队列*/
+        ArrayList<BiConsumer> setterList = new ArrayList<>(consumers.values());
+        /*读取每一行的逻辑*/
+        this.currentSaxReader = new Excel07SaxReader((sheetIndex, rowIndex, rowList) -> {
+            /*只读取第一个sheet*/
+            if (sheetIndex != 0) {
+                return;
+            }
+            /*跳过第一行*/
+            if (rowIndex == 0) {
+                return;
+            }
+            /*读取当前行的每一个属性 最终得到rowData*/
+            R rowData = newObjectSupplier.get();
+            for (int colIndex = 0; colIndex < convertsList.size(); colIndex++) {
+                /*先把所有读到的数据转为String*/
+                String value = object2String(rowList.get(colIndex));
+                /*获取当前的转换器*/
+                ExFunction converter = convertsList.get(colIndex);
+                BiConsumer setter = setterList.get(colIndex);
+                Object apply = null;
                 try {
-                    dataConsumer.accept(rowData);
-                    saxReaderResult.successRowIndex++;
+                    apply = converter.apply(value);
+                    setter.accept(rowData, apply);
                 } catch (Exception e) {
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
                     saxReaderResult.getErrorReport().put(rowIndex, exceptionMsg);
                 }
-                /*如果异常数量达到100 直接中断本次导入*/
-                if (saxReaderResult.getErrorReport().size() >= 100) {
-                    throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件格式");
-                }
-                //Console.log("[{}] [{}] {}", sheetIndex, rowIndex, rowList);
+            }
+            /*消费这个rowData*/
+            try {
+                dataConsumer.accept(rowData);
+                saxReaderResult.successRowIndex++;
+            } catch (Exception e) {
+                String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
+                saxReaderResult.getErrorReport().put(rowIndex, exceptionMsg);
+            }
+            /*如果异常数量达到100 直接中断本次导入*/
+            if (saxReaderResult.getErrorReport().size() >= 100) {
+                throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");
             }
         });
         return saxReaderResult;
@@ -341,5 +338,17 @@ public class ExcelImport<R> {
         RETURN_EMPTY_LIST_IF_EXIST_FAIL,
         /*遇到失败时跳过异常的行 并返回成功的行*/
         RETURN_SUCCESS_LIST_IF_EXIST_FAIL;
+    }
+
+    /**
+     * sax模式读取结果
+     */
+    @Data
+    public static class SaxReaderResult {
+
+        /*成功读取并消费的行号*/
+        int successRowIndex = 0;
+        /*key=行号 value=错误信息*/
+        Map<Long, String> errorReport = new HashMap<>();
     }
 }
