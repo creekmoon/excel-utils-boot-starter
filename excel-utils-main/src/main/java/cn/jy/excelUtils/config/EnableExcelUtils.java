@@ -1,4 +1,4 @@
-package cn.jy.excelUtils.core;
+package cn.jy.excelUtils.config;
 
 
 import org.springframework.context.annotation.Import;
@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
  */
 @Target({ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
-@Import({ExcelUtilsAutoConfiguration.class})
-public @interface EnableExcelUtilCustomExceptionSupport {
+@Import({ExcelUtilsConfig.class, ExcelUtilsAutoConfiguration.class})
+public @interface EnableExcelUtils {
 
 }

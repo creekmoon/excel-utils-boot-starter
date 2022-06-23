@@ -2,9 +2,9 @@ package cn.jy.excelUtils.example;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.RandomUtil;
+import cn.jy.excelUtils.core.AsyncReadState;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
-import cn.jy.excelUtils.core.ExcelImport.SaxReaderResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,6 +45,7 @@ public class ExampleController {
                 .response(response);
 
     }
+
     private Student getStudent() {
         Student student = new Student();
         //随机年龄
@@ -77,9 +78,9 @@ public class ExampleController {
                 .addConvert("姓名", Student::setUserName)
                 .addConvert("年龄", Integer::valueOf, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
-                .addConvert("过期时间", x->{
-                        return DateUtil.parse(x.substring(0, 10));
-                    }, Student::setBirthday)
+                .addConvert("过期时间", x -> {
+                    return DateUtil.parse(x.substring(0, 10));
+                }, Student::setBirthday)
                 .read(student -> {
                     System.out.println(student);
                 })
@@ -101,21 +102,24 @@ public class ExampleController {
     public void importExcelSax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
-        SaxReaderResult saxReaderResult = ExcelImport.create(file, Student::new)
+        AsyncReadState asyncReadState = ExcelImport.create(file, Student::new)
                 .addConvert("姓名", Student::setUserName)
-                .addConvert("年龄", (String x)->{
+                .addConvert("年龄", (String x) -> {
                     Integer integer = x.contains(".") ? Integer.valueOf(x.substring(0, x.indexOf("."))) : Integer.valueOf(x);
                     return integer;
                 }, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
-                .addConvert("过期时间", x->{
+                .addConvert("过期时间", x -> {
                     return DateUtil.parse(x.substring(0, 10));
                 }, Student::setBirthday)
                 .saxRead(
                         student -> {
-                            System.out.println(student);
-                        });
-        System.out.println(saxReaderResult);
+                            //System.out.println(student);
+                        }, state -> {
+                            System.out.println(state);
+                        }
+                );
+        System.out.println(asyncReadState);
         //判断这个方法的执行时间
         long end = System.currentTimeMillis();
         System.out.println("执行时间:" + (end - start));

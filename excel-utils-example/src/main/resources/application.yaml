@@ -5,3 +5,6 @@ Spring:
     multipart:
       max-file-size: 30MB
       max-request-size: 50MB
+excel-utils:
+  import-max-parallel: 4
+  sax-read-refresh-milliseconds: 1500

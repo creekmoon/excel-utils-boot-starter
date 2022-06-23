@@ -7,7 +7,9 @@ import cn.hutool.poi.excel.ExcelUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
 import cn.jy.excelUtils.exception.CheckedExcelException;
 import cn.jy.excelUtils.exception.GlobalExceptionManager;
-import lombok.Data;
+import cn.jy.excelUtils.threadPool.AsyncReadExecutor;
+import cn.jy.excelUtils.threadPool.AsyncReadStateCallbackExecutor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,7 +19,10 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Semaphore;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static cn.jy.excelUtils.core.ExcelConstants.*;
@@ -28,6 +33,10 @@ import static cn.jy.excelUtils.core.ExcelConstants.*;
  */
 @Slf4j
 public class ExcelImport<R> {
+    /**
+     * 控制导入并发数量
+     */
+    public static Semaphore semaphore;
     public static final String RESULT_TITLE = "导入结果";
     /**
      * 默认读取器-基于内存
@@ -108,11 +117,11 @@ public class ExcelImport<R> {
      *
      * @throws IOException
      */
-    private SaxReaderResult initSaxReader(ExConsumer<R> dataConsumer) {
-
-        SaxReaderResult saxReaderResult = new SaxReaderResult();
+    private AsyncReadState initSaxReader(ExConsumer<R> dataConsumer) {
+        /*如果已经成功初始化,直接返回*/
+        AsyncReadState asyncReadState = new AsyncReadState();
         if (this.currentSaxReader != null) {
-            return saxReaderResult;
+            return asyncReadState;
         }
         /*转换器队列*/
         ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
@@ -142,23 +151,23 @@ public class ExcelImport<R> {
                     setter.accept(rowData, apply);
                 } catch (Exception e) {
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                    saxReaderResult.getErrorReport().put(rowIndex, exceptionMsg);
+                    asyncReadState.getErrorReport().put(rowIndex, exceptionMsg);
                 }
             }
             /*消费这个rowData*/
             try {
                 dataConsumer.accept(rowData);
-                saxReaderResult.successRowIndex++;
+                asyncReadState.successRowIndex++;
             } catch (Exception e) {
                 String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                saxReaderResult.getErrorReport().put(rowIndex, exceptionMsg);
+                asyncReadState.getErrorReport().put(rowIndex, exceptionMsg);
             }
             /*如果异常数量达到100 直接中断本次导入*/
-            if (saxReaderResult.getErrorReport().size() >= 100) {
+            if (asyncReadState.getErrorReport().size() >= 100) {
                 throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");
             }
         });
-        return saxReaderResult;
+        return asyncReadState;
     }
 
     public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
@@ -201,22 +210,43 @@ public class ExcelImport<R> {
     /**
      * SAX方式读取
      */
-    public SaxReaderResult saxRead(ExConsumer<R> dataConsumer) throws IOException {
-        SaxReaderResult saxReaderResult = initSaxReader(dataConsumer);
-        try {
-            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
-            this.currentSaxReader.read(file.getInputStream(), -1);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return saxReaderResult;
+    @SneakyThrows
+    public AsyncReadState saxRead(ExConsumer<R> dataConsumer, Consumer<AsyncReadState> asyncCallback) {
+        AsyncReadState asyncReadState = initSaxReader(dataConsumer);
+        /*提交给定时任务线程池 用于监控导入状态*/
+        Runnable callbackTask = () -> {
+            asyncCallback.accept(asyncReadState);
+        };
+        ScheduledFuture scheduledFuture = AsyncReadStateCallbackExecutor.run(callbackTask);
+        /*尝试拿锁*/
+        semaphore.acquire();
+        asyncReadState.waiting = false;
+        /*提交给异步线程池*/
+        AsyncReadExecutor.run(() -> {
+            try {
+                /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
+                currentSaxReader.read(file.getInputStream(), -1);
+            } catch (Exception e) {
+                log.error("SaxReader读取Excel文件异常", e);
+                e.printStackTrace();
+            } finally {
+                /*读取结束后 停止定时回调*/
+                scheduledFuture.cancel(false);
+                /*读取结束后,置为读取完毕,并执行最后一次回调*/
+                asyncReadState.completed = true;
+                callbackTask.run();
+                /*释放信号量*/
+                semaphore.release();
+            }
+        });
+        return asyncReadState;
     }
 
-    public ExcelImport<R> read(ExConsumer<R> dataConsumer) throws IOException {
+    public ExcelImport<R> read(ExConsumer<R> dataConsumer) {
         return read(dataConsumer, ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL);
     }
 
-    public ExcelImport<R> read(ExConsumer<R> dataConsumer, ReadStrategy readStrategy) throws IOException {
+    public ExcelImport<R> read(ExConsumer<R> dataConsumer, ReadStrategy readStrategy) {
         List<R> read = read(readStrategy);
         for (int i = 0; i < read.size(); i++) {
             try {
@@ -229,39 +259,46 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public List<R> read() throws IOException {
+    public List<R> read() {
         // 读取Excel中的对象, 如果存在任何一行转换失败,则返回空List
         return read(ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL);
     }
 
-    public List<R> read(ReadStrategy readStrategy) throws IOException {
-        /*初始化读取器*/
-        initMemoryReader();
-        /*是否存在读取不通过的情况*/
-        boolean existsFail = false;
-        rows = currentReader.readAll();
-        for (Map<String, Object> row : rows) {
-            currentObject = newObjectSupplier.get();
-            object2Row.put(currentObject, row);
-            try {
-                rowCheckMustExist(row);
-                rowConvert(row);
-                row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
-            } catch (Exception e) {
-                existsFail = true;
-                row.put(RESULT_TITLE, GlobalExceptionManager.getExceptionMsg(e));
-                object2Row.remove(currentObject);
+    @SneakyThrows
+    public List<R> read(ReadStrategy readStrategy) {
+        semaphore.acquire();
+        try {
+            /*初始化读取器*/
+            initMemoryReader();
+            /*是否存在读取不通过的情况*/
+            boolean existsFail = false;
+            rows = currentReader.readAll();
+            for (Map<String, Object> row : rows) {
+                currentObject = newObjectSupplier.get();
+                object2Row.put(currentObject, row);
+                try {
+                    rowCheckMustExist(row);
+                    rowConvert(row);
+                    row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
+                } catch (Exception e) {
+                    existsFail = true;
+                    row.put(RESULT_TITLE, GlobalExceptionManager.getExceptionMsg(e));
+                    object2Row.remove(currentObject);
+                }
             }
+            /*如果读取策略为RETURN_EMPTY_ON_FAIL*/
+            if (readStrategy == ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL) {
+                return existsFail ? Collections.EMPTY_LIST : new ArrayList<R>(object2Row.keySet());
+            }
+            /*如果读取策略为CONTINUE_ON_FAIL*/
+            if (readStrategy == ReadStrategy.RETURN_SUCCESS_LIST_IF_EXIST_FAIL) {
+                return new ArrayList<R>(object2Row.keySet());
+            }
+            throw new RuntimeException("读取文档时发生错误,未定义读取策略ReadStrategy");
+        } finally {
+            semaphore.release();
         }
-        /*如果读取策略为RETURN_EMPTY_ON_FAIL*/
-        if (readStrategy == ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL) {
-            return existsFail ? Collections.EMPTY_LIST : new ArrayList<R>(object2Row.keySet());
-        }
-        /*如果读取策略为CONTINUE_ON_FAIL*/
-        if (readStrategy == ReadStrategy.RETURN_SUCCESS_LIST_IF_EXIST_FAIL) {
-            return new ArrayList<R>(object2Row.keySet());
-        }
-        throw new RuntimeException("读取文档时发生错误,未定义读取策略ReadStrategy");
+
     }
 
 
@@ -340,15 +377,4 @@ public class ExcelImport<R> {
         RETURN_SUCCESS_LIST_IF_EXIST_FAIL;
     }
 
-    /**
-     * sax模式读取结果
-     */
-    @Data
-    public static class SaxReaderResult {
-
-        /*成功读取并消费的行号*/
-        int successRowIndex = 0;
-        /*key=行号 value=错误信息*/
-        Map<Long, String> errorReport = new HashMap<>();
-    }
 }
