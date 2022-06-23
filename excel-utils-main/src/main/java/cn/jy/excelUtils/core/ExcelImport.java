@@ -69,6 +69,9 @@ public class ExcelImport<R> {
 
 
     public static <T> ExcelImport<T> create(MultipartFile file, Supplier<T> supplier) {
+        if (semaphore == null) {
+            throw new RuntimeException("请使用@EnableExcelUtils进行初始化配置!");
+        }
         ExcelImport<T> excelImport = new ExcelImport();
         excelImport.newObjectSupplier = supplier;
         excelImport.file = file;
