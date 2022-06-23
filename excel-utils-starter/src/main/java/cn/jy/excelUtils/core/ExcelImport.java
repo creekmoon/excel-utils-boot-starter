@@ -211,7 +211,7 @@ public class ExcelImport<R> {
     }
 
     /**
-     * SAX方式读取
+     * SAX方式读取，完全是异步模式，注意将产生事务失效的可能
      */
     @SneakyThrows
     public AsyncReadState saxRead(ExConsumer<R> dataConsumer, Consumer<AsyncReadState> asyncCallback) {

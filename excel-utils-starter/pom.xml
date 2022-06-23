@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>excel-utils</artifactId>
+    <artifactId>excel-utils-starter</artifactId>
     <version>${current.version}</version>
     <dependencies>
         <dependency>
