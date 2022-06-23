@@ -78,9 +78,7 @@ public class ExampleController {
                 .addConvert("姓名", Student::setUserName)
                 .addConvert("年龄", Integer::valueOf, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
-                .addConvert("过期时间", x -> {
-                    return DateUtil.parse(x.substring(0, 10));
-                }, Student::setBirthday)
+                .addConvert("过期时间", x -> DateUtil.parse(x.substring(0, 10)), Student::setBirthday)
                 .read(student -> {
                     System.out.println(student);
                 })
