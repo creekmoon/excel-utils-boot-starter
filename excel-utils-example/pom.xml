@@ -28,7 +28,7 @@
         </dependency>
         <dependency>
             <groupId>io.github.yinjiangyue</groupId>
-            <artifactId>excel-utils</artifactId>
+            <artifactId>excel-utils-starter</artifactId>
             <version>${current.version}</version>
         </dependency>
     </dependencies>
