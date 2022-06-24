@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <artifactId>excel-utils-project</artifactId>
-        <groupId>io.github.yinjiangyue</groupId>
+        <groupId>io.github.creekmoon</groupId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -27,7 +27,7 @@
             <artifactId>hutool-all</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.github.yinjiangyue</groupId>
+            <groupId>io.github.creekmoon</groupId>
             <artifactId>excel-utils-starter</artifactId>
             <version>${current.version}</version>
         </dependency>
