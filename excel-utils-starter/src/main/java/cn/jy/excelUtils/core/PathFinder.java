@@ -16,13 +16,13 @@ public class PathFinder {
     private static volatile String applicationParentFilePath;
 
     /**
-     * 获取文件绝对路径
+     * 获取文件绝对路径 默认路径在当前jar包的同级目录
      *
-     * @param uniqueName 唯一名称,写文件完成后会获得
+     * @param taskId 唯一名称,写文件完成后会获得
      * @return
      */
-    public static String getAbsoluteFilePath(String uniqueName) {
-        return getApplicationParentFilePath() + File.separator + "temp_files" + File.separator + DateUtil.format(new Date(), "yyyy-MM-dd") + File.separator + uniqueName + ".xlsx";
+    public static String getAbsoluteFilePath(String taskId) {
+        return getApplicationParentFilePath() + File.separator + "temp_files" + File.separator + DateUtil.format(new Date(), "yyyy-MM-dd") + File.separator + taskId + ".xlsx";
     }
 
 

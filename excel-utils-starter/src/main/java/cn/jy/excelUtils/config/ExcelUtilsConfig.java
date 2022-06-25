@@ -16,11 +16,16 @@ public class ExcelUtilsConfig {
      */
     private int importMaxParallel = 4;
     /**
-     * 使用SAXReader时, 异步返回的状态刷新频率 单位毫秒
+     * 异步读写时,回调状态的刷新时间 单位毫秒
      */
-    private int saxReadRefreshMilliseconds = 1500;
+    private int asyncRefreshMilliseconds = 1500;
     /**
-     * 使用SAXReader时,如果导入累计出现异常超过最大次数,则中断导入
+     * 使用异步导入时,如果导入累计出现异常超过最大次数,则中断导入
      */
-    private int saxReadMaxFail = 100;
+    private int asyncImportMaxFail = 100;
+
+    /**
+     * 临时文件的保留寿命 单位分钟
+     */
+    private int tempFileLifeMinutes = 5;
 }

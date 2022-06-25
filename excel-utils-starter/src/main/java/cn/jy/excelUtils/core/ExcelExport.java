@@ -7,19 +7,20 @@ import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.BigExcelWriter;
 import cn.hutool.poi.excel.ExcelUtil;
+import cn.jy.excelUtils.threadPool.AsyncExportExecutor;
+import cn.jy.excelUtils.threadPool.AsyncStateCallbackExecutor;
+import cn.jy.excelUtils.threadPool.CleanTempFilesExecutor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -31,17 +32,6 @@ public class ExcelExport<R> {
 
     private List<Title<R>> titles = new ArrayList<>();
 
-    /*一个延迟任务线程池*/
-    private static ScheduledThreadPoolExecutor excelCleanExecutorService;
-    private static ThreadFactory threadFactory;
-
-    static {
-        threadFactory = new CustomizableThreadFactory("excel-clean-thread");
-        excelCleanExecutorService = new ScheduledThreadPoolExecutor(
-                1,
-                threadFactory,
-                new ThreadPoolExecutor.AbortPolicy());
-    }
 
     /**
      * 打印调试内容
@@ -58,7 +48,7 @@ public class ExcelExport<R> {
     HashMap<Integer, List<Title>> depth2Titles = new HashMap<>();
 
     /*唯一识别名称*/
-    private String uniqueName;
+    private String taskId;
     /*自定义的名称*/
     private String excelName;
     /*写入器*/
@@ -81,7 +71,7 @@ public class ExcelExport<R> {
     public static <T> ExcelExport<T> create(String excelName, Class<T> c) {
         ExcelExport<T> excelExport = new ExcelExport();
         excelExport.excelName = excelName;
-        excelExport.uniqueName = UUID.fastUUID().toString();
+        excelExport.taskId = UUID.fastUUID().toString();
         return excelExport;
     }
 
@@ -97,34 +87,37 @@ public class ExcelExport<R> {
         this.debugger = true;
     }
 
+
     /**
-     * 语法糖 自动进行分页并导出 最高支持100W行
+     * 写入对象 当返回null或者空数组时停止
      *
-     * @param response   spring-HttpServletResponse
-     * @param pageQuery  继承了PageQuery的类 通常是PO
-     * @param dataSource 数据源 通常是queryList
-     * @param <T>
-     * @throws IOException
+     * @param dataSupplier
+     * @return
      */
-//    public <T> void wtxSimpleExport(HttpServletResponse response, T pageQuery, ExFunction<T, List<R>> dataSource) throws IOException {
-//        PageQuery pageable = (PageQuery) pageQuery;
-//        pageable.setPageSize(1000);
-//        for (int i = 1; i < 1001; i++) {
-//            pageable.setPageNo(i);
-//            List<R> apply = null;
-//            try {
-//                apply = dataSource.apply(pageQuery);
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//                break;
-//            }
-//            this.writeAndIgnoreValueGetterException(apply);
-//            if (pageable.getTotalPage() == null || pageable.getTotalPage() <= i) {
-//                break;
-//            }
-//        }
-//        this.response(response);
-//    }
+    @SneakyThrows
+    public AsyncTaskState writeAsync(Supplier<List<R>> dataSupplier, Consumer<AsyncTaskState> asyncCallback) {
+        //生成一个定时回调任务
+        AsyncTaskState asyncTaskState = AsyncStateCallbackExecutor.createAsyncTaskState(taskId, asyncCallback);
+        /*执行异步写方法*/
+        AsyncExportExecutor.run(() -> {
+            try {
+                for (; ; ) {
+                    List<R> dataList = dataSupplier.get();
+                    if (dataList == null || dataList.size() == 0) {
+                        stopWrite();
+                        break;
+                    }
+                    asyncTaskState.setSuccessRowIndex(asyncTaskState.getSuccessRowIndex() + dataList.size());
+                    write(dataList, WriteStrategy.CONTINUE_ON_ERROR);
+                }
+            } finally {
+                /*异步写完成后 将回调任务关闭*/
+                AsyncStateCallbackExecutor.completedAsyncTaskState(taskId);
+            }
+        });
+        return asyncTaskState;
+    }
+
 
     /**
      * 写入对象
@@ -133,17 +126,7 @@ public class ExcelExport<R> {
      * @return
      */
     public ExcelExport<R> write(List<R> data) {
-        return write(data, titles, WriteStrategy.CONTINUE_ON_ERROR);
-    }
-
-    /**
-     * 写入对象
-     *
-     * @param data
-     * @return
-     */
-    public ExcelExport<R> write(List<R> data, WriteStrategy writeStrategy) {
-        return write(data, titles, writeStrategy);
+        return write(data, WriteStrategy.CONTINUE_ON_ERROR);
     }
 
 
@@ -163,19 +146,17 @@ public class ExcelExport<R> {
      * 以对象形式写入
      *
      * @param vos           数据集
-     * @param titles        标题映射关系
      * @param writeStrategy 写入策略
-     * @param <T>
      * @return
      */
-    private <T> ExcelExport<R> write(List<T> vos, List<Title<T>> titles, WriteStrategy writeStrategy) {
+    private ExcelExport<R> write(List<R> vos, WriteStrategy writeStrategy) {
         this.initTitles();
         List<List<Object>> rows =
                 vos.stream()
                         .map(
                                 vo -> {
                                     List<Object> row = new LinkedList<>();
-                                    for (Title<T> title : titles) {
+                                    for (Title<R> title : titles) {
                                         //当前行中的某个属性值
                                         Object data = null;
                                         try {
@@ -185,8 +166,8 @@ public class ExcelExport<R> {
                                                 // nothing to do
                                             }
                                             if (writeStrategy == WriteStrategy.STOP_ON_ERROR) {
-                                                String uniqueName = stopWrite();
-                                                cleanTempFile(uniqueName);
+                                                String taskId = stopWrite();
+                                                CleanTempFilesExecutor.cleanTempFile(taskId);
                                                 log.error("生成Excel获取数据值时发生错误!", exception);
                                                 throw new RuntimeException("生成Excel获取数据值时发生错误!");
                                             }
@@ -299,11 +280,15 @@ public class ExcelExport<R> {
 
     }
 
-    /*保存文件*/
+    /**
+     * 停止写入
+     *
+     * @return taskId
+     */
     private String stopWrite() {
         this.autoSetColumnWidth();
         getBigExcelWriter().close();
-        return uniqueName;
+        return taskId;
     }
 
 
@@ -355,36 +340,21 @@ public class ExcelExport<R> {
 
     /*将文件响应给请求*/
     public void response(HttpServletResponse response) throws IOException {
-        String uniqueName = this.stopWrite();
+        String taskId = this.stopWrite();
         try {
-            ExcelExport.response(response, PathFinder.getAbsoluteFilePath(uniqueName), excelName);
+            ExcelExport.response(response, PathFinder.getAbsoluteFilePath(taskId), excelName);
         } finally {
             /*清除临时文件*/
-            cleanTempFile(uniqueName);
+            CleanTempFilesExecutor.cleanTempFile(taskId);
         }
     }
 
 
     private BigExcelWriter getBigExcelWriter() {
         if (bigExcelWriter == null) {
-            bigExcelWriter = ExcelUtil.getBigWriter(PathFinder.getAbsoluteFilePath(uniqueName));
+            bigExcelWriter = ExcelUtil.getBigWriter(PathFinder.getAbsoluteFilePath(taskId));
         }
         return bigExcelWriter;
-    }
-
-
-    /**
-     * 清理临时文件
-     *
-     * @param uniqueName
-     * @throws IOException
-     */
-    private static void cleanTempFile(String uniqueName) {
-        excelCleanExecutorService.schedule(() -> {
-            if (FileUtil.del(PathFinder.getAbsoluteFilePath(uniqueName))) {
-                log.warn("清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(uniqueName));
-            }
-        }, 5, TimeUnit.MINUTES);
     }
 
 

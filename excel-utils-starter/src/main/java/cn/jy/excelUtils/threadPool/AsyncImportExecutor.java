@@ -11,7 +11,7 @@ import java.util.concurrent.ThreadFactory;
  *
  * @author jy
  */
-public class AsyncReadExecutor {
+public class AsyncImportExecutor {
     private static ThreadFactory namedThreadFactory = new CustomizableThreadFactory("excel-read-thread");
     //两个线程的固定线程池
     private static ExecutorService threadPoolExecutor = Executors.newCachedThreadPool(namedThreadFactory);

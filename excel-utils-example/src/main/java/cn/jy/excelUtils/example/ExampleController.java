@@ -2,7 +2,7 @@ package cn.jy.excelUtils.example;
 
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.RandomUtil;
-import cn.jy.excelUtils.core.AsyncReadState;
+import cn.jy.excelUtils.core.AsyncTaskState;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -100,7 +100,7 @@ public class ExampleController {
     public void importExcelSax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
-        AsyncReadState asyncReadState = ExcelImport.create(file, Student::new)
+        AsyncTaskState asyncTaskState = ExcelImport.create(file, Student::new)
                 .addConvert("姓名", Student::setUserName)
                 .addConvert("年龄", (String x) -> {
                     Integer integer = x.contains(".") ? Integer.valueOf(x.substring(0, x.indexOf("."))) : Integer.valueOf(x);
@@ -110,14 +110,14 @@ public class ExampleController {
                 .addConvert("过期时间", x -> {
                     return DateUtil.parse(x.substring(0, 10));
                 }, Student::setBirthday)
-                .saxRead(
+                .readAsync(
                         student -> {
                             //System.out.println(student);
                         }, state -> {
                             System.out.println(state);
                         }
                 );
-        System.out.println(asyncReadState);
+        System.out.println(asyncTaskState);
         //判断这个方法的执行时间
         long end = System.currentTimeMillis();
         System.out.println("执行时间:" + (end - start));

@@ -1,14 +1,15 @@
 package cn.jy.excelUtils.core;
 
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
 import cn.jy.excelUtils.exception.CheckedExcelException;
 import cn.jy.excelUtils.exception.GlobalExceptionManager;
-import cn.jy.excelUtils.threadPool.AsyncReadExecutor;
-import cn.jy.excelUtils.threadPool.AsyncReadStateCallbackExecutor;
+import cn.jy.excelUtils.threadPool.AsyncImportExecutor;
+import cn.jy.excelUtils.threadPool.AsyncStateCallbackExecutor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -19,13 +20,13 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static cn.jy.excelUtils.core.ExcelConstants.*;
+import static cn.jy.excelUtils.core.ExcelConstants.CONVERT_SUCCESS_MSG;
+import static cn.jy.excelUtils.core.ExcelConstants.IMPORT_SUCCESS_MSG;
 
 /**
  * @author JY
@@ -37,15 +38,16 @@ public class ExcelImport<R> {
      * 控制导入并发数量
      */
     public static Semaphore semaphore;
+    /**
+     * 导入结果的title
+     */
     public static final String RESULT_TITLE = "导入结果";
     /**
-     * 默认读取器-基于内存
+     * 导入结果的title
      */
-    private ExcelReader currentReader;
-    /**
-     * Sax读取器-基于流
-     */
-    private Excel07SaxReader currentSaxReader;
+    public static int ASYNC_IMPORT_FAIL = -1;
+
+
     /* key=title  value=执行器 */
     private Map<String, ExFunction> converts = new LinkedHashMap(32);
     /* key=title value=消费者(通常是setter方法)*/
@@ -56,7 +58,7 @@ public class ExcelImport<R> {
     /* 所有原生的Excel行 */
     private List<Map<String, Object>> rows;
     /* key=对象  value=未转换的对象  如果转换失败不会在里面*/
-    private Map<R, Map<String, Object>> object2Row = new LinkedHashMap<>(32);
+    private Map<R, Map<String, Object>> object2Row = new LinkedHashMap<>(512);
 
     private Supplier<R> newObjectSupplier;
     /*当前导入的文件*/
@@ -85,13 +87,11 @@ public class ExcelImport<R> {
      *
      * @throws IOException
      */
-    private void initMemoryReader() throws IOException {
-        if (this.currentReader != null) {
-            return;
-        }
-        this.currentReader = ExcelUtil.getReader(file.getInputStream());
+    private ExcelReader initMemoryReader() throws IOException {
+        ExcelReader reader = ExcelUtil.getReader(file.getInputStream());
         /*格式化器 将一切结果都转为String*/
-        this.currentReader.setCellEditor((Cell cell, Object value) -> object2String(value));
+        reader.setCellEditor((Cell cell, Object value) -> object2String(value));
+        return reader;
     }
 
 
@@ -120,18 +120,15 @@ public class ExcelImport<R> {
      *
      * @throws IOException
      */
-    private AsyncReadState initSaxReader(ExConsumer<R> dataConsumer) {
-        /*如果已经成功初始化,直接返回*/
-        AsyncReadState asyncReadState = new AsyncReadState();
-        if (this.currentSaxReader != null) {
-            return asyncReadState;
-        }
+    Excel07SaxReader initSaxReader(AsyncTaskState currentAsyncTaskState, ExConsumer<R> dataConsumer) {
+
         /*转换器队列*/
         ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
         /*setter队列*/
         ArrayList<BiConsumer> setterList = new ArrayList<>(consumers.values());
-        /*读取每一行的逻辑*/
-        this.currentSaxReader = new Excel07SaxReader((sheetIndex, rowIndex, rowList) -> {
+
+        /*返回一个Sax读取器*/
+        return new Excel07SaxReader((sheetIndex, rowIndex, rowList) -> {
             /*只读取第一个sheet*/
             if (sheetIndex != 0) {
                 return;
@@ -153,24 +150,24 @@ public class ExcelImport<R> {
                     apply = converter.apply(value);
                     setter.accept(rowData, apply);
                 } catch (Exception e) {
+                    /*遇到异常*/
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                    asyncReadState.getErrorReport().put(rowIndex, exceptionMsg);
+                    currentAsyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
                 }
             }
             /*消费这个rowData*/
             try {
                 dataConsumer.accept(rowData);
-                asyncReadState.successRowIndex++;
+                currentAsyncTaskState.successRowIndex++;
             } catch (Exception e) {
                 String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                asyncReadState.getErrorReport().put(rowIndex, exceptionMsg);
+                currentAsyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
             }
-            /*如果异常数量达到100 直接中断本次导入*/
-            if (asyncReadState.getErrorReport().size() >= 100) {
+            /*如果异常数量达到指定的值时 直接中断本次导入*/
+            if (ASYNC_IMPORT_FAIL >= 0 && currentAsyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_FAIL) {
                 throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");
             }
         });
-        return asyncReadState;
     }
 
     public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
@@ -211,38 +208,31 @@ public class ExcelImport<R> {
     }
 
     /**
-     * SAX方式读取，完全是异步模式，注意将产生事务失效的可能
+     * 异步SAX方式读取，任务会提交到线程池中,注意将可能产生事务失效的情况
      */
     @SneakyThrows
-    public AsyncReadState saxRead(ExConsumer<R> dataConsumer, Consumer<AsyncReadState> asyncCallback) {
-        AsyncReadState asyncReadState = initSaxReader(dataConsumer);
-        /*提交给定时任务线程池 用于监控导入状态*/
-        Runnable callbackTask = () -> {
-            asyncCallback.accept(asyncReadState);
-        };
-        ScheduledFuture scheduledFuture = AsyncReadStateCallbackExecutor.run(callbackTask);
+    public AsyncTaskState readAsync(ExConsumer<R> dataConsumer, Consumer<AsyncTaskState> asyncCallback) {
+        /*创建回调任务*/
+        AsyncTaskState asyncTaskState = AsyncStateCallbackExecutor.createAsyncTaskState(UUID.fastUUID().toString(), asyncCallback);
+        /*生成一个SAX读取器*/
+        Excel07SaxReader saxReader = initSaxReader(asyncTaskState, dataConsumer);
         /*尝试拿锁*/
         semaphore.acquire();
-        asyncReadState.waiting = false;
         /*提交给异步线程池*/
-        AsyncReadExecutor.run(() -> {
+        AsyncImportExecutor.run(() -> {
             try {
                 /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
-                currentSaxReader.read(file.getInputStream(), -1);
+                saxReader.read(file.getInputStream(), -1);
             } catch (Exception e) {
                 log.error("SaxReader读取Excel文件异常", e);
                 e.printStackTrace();
             } finally {
-                /*读取结束后 停止定时回调*/
-                scheduledFuture.cancel(false);
-                /*读取结束后,置为读取完毕,并执行最后一次回调*/
-                asyncReadState.completed = true;
-                callbackTask.run();
+                AsyncStateCallbackExecutor.completedAsyncTaskState(asyncTaskState.taskId);
                 /*释放信号量*/
                 semaphore.release();
             }
         });
-        return asyncReadState;
+        return asyncTaskState;
     }
 
     public ExcelImport<R> read(ExConsumer<R> dataConsumer) {
@@ -272,10 +262,10 @@ public class ExcelImport<R> {
         semaphore.acquire();
         try {
             /*初始化读取器*/
-            initMemoryReader();
+            ExcelReader memoryReader = initMemoryReader();
             /*是否存在读取不通过的情况*/
             boolean existsFail = false;
-            rows = currentReader.readAll();
+            rows = memoryReader.readAll();
             for (Map<String, Object> row : rows) {
                 currentObject = newObjectSupplier.get();
                 object2Row.put(currentObject, row);
@@ -306,17 +296,8 @@ public class ExcelImport<R> {
 
 
     /* 读取 */
-    public void readAndResponse(HttpServletResponse response, ExConsumer<R> rowConsumer) throws IOException {
-        List<R> read = read();
-        for (R row : read) {
-            try {
-                rowConsumer.accept(row);
-                this.setResult(row, IMPORT_SUCCESS_MSG);
-            } catch (Exception e) {
-                log.error(ERROR_MSG, e);
-                this.setResult(row, GlobalExceptionManager.getExceptionMsg(e));
-            }
-        }
+    public void readAndResponse(ExConsumer<R> rowConsumer, HttpServletResponse response) throws IOException {
+        this.read(rowConsumer);
         this.response(response);
     }
 
