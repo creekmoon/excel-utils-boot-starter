@@ -5,6 +5,8 @@ import cn.hutool.core.util.RandomUtil;
 import cn.jy.excelUtils.core.AsyncTaskState;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Date;
 
 @RestController("/test")
+@Api("demo例子")
 public class ExampleController {
 
     /**
@@ -28,6 +31,7 @@ public class ExampleController {
      * @throws IOException
      */
     @GetMapping(value = "/exportExcel")
+    @ApiOperation("导出")
     public void exportExcel(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = new ArrayList<>();
         //循环一万次加入数据
@@ -70,6 +74,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcel")
+    @ApiOperation("导入")
     public void importExcel(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
@@ -96,8 +101,9 @@ public class ExampleController {
      * @param response
      * @throws IOException
      */
-    @PostMapping(value = "/importExcelSax")
-    public void importExcelSax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    @PostMapping(value = "/importExcelAsync")
+    @ApiOperation("异步导如")
+    public void importExcelAsync(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
         AsyncTaskState asyncTaskState = ExcelImport.create(file, Student::new)

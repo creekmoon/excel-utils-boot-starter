@@ -31,6 +31,11 @@
             <artifactId>excel-utils-starter</artifactId>
             <version>${current.version}</version>
         </dependency>
+        <!-- swagger start -->
+        <dependency>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>knife4j-spring-boot-starter</artifactId>
+        </dependency>
     </dependencies>
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
