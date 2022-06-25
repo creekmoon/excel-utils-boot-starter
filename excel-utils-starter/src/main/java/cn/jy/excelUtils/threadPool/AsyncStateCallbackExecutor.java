@@ -1,6 +1,7 @@
 package cn.jy.excelUtils.threadPool;
 
 import cn.jy.excelUtils.core.AsyncTaskState;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
 import java.util.concurrent.*;
@@ -11,6 +12,7 @@ import java.util.function.Consumer;
  *
  * @author jy
  */
+@Slf4j
 public class AsyncStateCallbackExecutor {
     private static ThreadFactory namedThreadFactory = new CustomizableThreadFactory("excel-callback-thread");
     /**
@@ -40,12 +42,23 @@ public class AsyncStateCallbackExecutor {
 
     }
 
-
+    /**
+     * 创建一个回调任务
+     *
+     * @param taskId
+     * @param asyncCallback
+     * @return
+     */
     public static AsyncTaskState createAsyncTaskState(String taskId, Consumer<AsyncTaskState> asyncCallback) {
         AsyncTaskState asyncTaskState = new AsyncTaskState();
         asyncTaskState.setTaskId(taskId);
         asyncTaskState.setWaiting(true);
         Runnable runnable = () -> {
+            if (asyncTaskState.isCompleted()) {
+                //通常不会走到这一步 因为任务标记完成之后,不会在线程池内存活了
+                log.error("任务已经完成,不应该再次执行! 如果此错误连续发生,请检查代码逻辑!");
+                return;
+            }
             if (asyncTaskState.getSuccessRowIndex() > 0) {
                 asyncTaskState.setWaiting(false);
             }
@@ -63,7 +76,7 @@ public class AsyncStateCallbackExecutor {
     }
 
     /**
-     * 取消回调任务
+     * 标记回调任务完成
      *
      * @param taskId
      */
