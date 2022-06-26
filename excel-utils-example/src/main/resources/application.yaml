@@ -10,4 +10,11 @@ Spring:
       max-request-size: 50MB
 excel-utils:
   import-max-parallel: 4
-  sax-read-refresh-milliseconds: 1500
+  async-refresh-milliseconds: 1500
+swagger-config:
+  enable: true
+  protocol: http
+  base-package: cn.jy.excelUtils.example
+  title: 导入导出测试API
+  version: 1.0
+  description: 导入导出测试API

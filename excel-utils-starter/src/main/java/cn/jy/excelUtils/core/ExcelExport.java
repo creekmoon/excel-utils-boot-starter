@@ -48,7 +48,7 @@ public class ExcelExport<R> {
     HashMap<Integer, List<Title>> depth2Titles = new HashMap<>();
 
     /*唯一识别名称*/
-    private String taskId;
+    public String taskId;
     /*自定义的名称*/
     private String excelName;
     /*写入器*/
@@ -89,9 +89,9 @@ public class ExcelExport<R> {
 
 
     /**
-     * 写入对象 当返回null或者空数组时停止
-     *
-     * @param dataSupplier
+     * 异步写入
+     * @param dataSupplier  数据提供者 当数据Size==0时 自动停止写入
+     * @param asyncCallback 异步回调方法,每隔1.5秒回调一次  通常这里可以将AsyncTaskState进行保存
      * @return
      */
     @SneakyThrows
@@ -104,13 +104,14 @@ public class ExcelExport<R> {
                 for (; ; ) {
                     List<R> dataList = dataSupplier.get();
                     if (dataList == null || dataList.size() == 0) {
-                        stopWrite();
                         break;
                     }
-                    asyncTaskState.setSuccessRowIndex(asyncTaskState.getSuccessRowIndex() + dataList.size());
+                    asyncTaskState.setTryRowIndex(asyncTaskState.getTryRowIndex() + dataList.size());
                     write(dataList, WriteStrategy.CONTINUE_ON_ERROR);
+                    asyncTaskState.setSuccessRowIndex(asyncTaskState.getSuccessRowIndex() + dataList.size());
                 }
             } finally {
+                stopWrite();
                 /*异步写完成后 将回调任务关闭*/
                 AsyncStateCallbackExecutor.completedAsyncTaskState(taskId);
             }

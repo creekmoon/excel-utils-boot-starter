@@ -120,8 +120,7 @@ public class ExcelImport<R> {
      *
      * @throws IOException
      */
-    Excel07SaxReader initSaxReader(AsyncTaskState currentAsyncTaskState, ExConsumer<R> dataConsumer) {
-
+    Excel07SaxReader initSaxReader(AsyncTaskState asyncTaskState, ExConsumer<R> dataConsumer) {
         /*转换器队列*/
         ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
         /*setter队列*/
@@ -152,19 +151,21 @@ public class ExcelImport<R> {
                 } catch (Exception e) {
                     /*遇到异常*/
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                    currentAsyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
+                    asyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
                 }
             }
             /*消费这个rowData*/
             try {
+                asyncTaskState.tryRowIndex++;
                 dataConsumer.accept(rowData);
-                currentAsyncTaskState.successRowIndex++;
+                asyncTaskState.successRowIndex++;
+
             } catch (Exception e) {
                 String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                currentAsyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
+                asyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
             }
             /*如果异常数量达到指定的值时 直接中断本次导入*/
-            if (ASYNC_IMPORT_FAIL >= 0 && currentAsyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_FAIL) {
+            if (ASYNC_IMPORT_FAIL >= 0 && asyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_FAIL) {
                 throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");
             }
         });
