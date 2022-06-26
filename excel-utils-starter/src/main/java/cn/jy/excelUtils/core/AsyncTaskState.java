@@ -12,10 +12,10 @@ import java.util.Map;
 public class AsyncTaskState {
     /*本次任务id*/
     String taskId;
-    /*尝试的行号*/
-    int tryRowIndex = 0;
-    /*成功的行号*/
-    int successRowIndex = 0;
+    /*尝试的次数*/
+    int tryRowCount = 0;
+    /*成功的次数*/
+    int successRowCount = 0;
     /*是否结束 不能用这个状态区分成功还是失败,只代表任务在线程池中已经执行完了*/
     boolean completed = false;
     /*是否处于等待状态(如果超过了并发导入数量 则会等待其他任务先完成)*/

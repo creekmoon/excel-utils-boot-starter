@@ -107,9 +107,9 @@ public class ExcelExport<R> {
                     if (dataList == null || dataList.size() == 0) {
                         break;
                     }
-                    asyncTaskState.setTryRowIndex(asyncTaskState.getTryRowIndex() + dataList.size());
+                    asyncTaskState.setTryRowCount(asyncTaskState.getTryRowCount() + dataList.size());
                     write(dataList, WriteStrategy.CONTINUE_ON_ERROR);
-                    asyncTaskState.setSuccessRowIndex(asyncTaskState.getSuccessRowIndex() + dataList.size());
+                    asyncTaskState.setSuccessRowCount(asyncTaskState.getSuccessRowCount() + dataList.size());
                 }
             } finally {
                 stopWrite();
@@ -311,15 +311,28 @@ public class ExcelExport<R> {
     }
 
     /**
+     * 响应请求 返回结果
+     *
+     * @param taskId
+     * @param responseExcelName
+     * @param response
+     * @throws IOException
+     */
+    public static void response(String taskId, String responseExcelName, HttpServletResponse response) throws IOException {
+        responseByFilePath(PathFinder.getAbsoluteFilePath(taskId), responseExcelName, response);
+    }
+
+
+    /**
      * 返回Excel
      *
-     * @param response          servlet请求
      * @param filePath          本地文件路径
      * @param responseExcelName 声明的文件名称,前端能看到 可以自己乱填
+     * @param response          servlet请求
      * @throws IOException
      */
     /*回应请求*/
-    public static void response(HttpServletResponse response, String filePath, String responseExcelName) throws IOException {
+    private static void responseByFilePath(String filePath, String responseExcelName, HttpServletResponse response) throws IOException {
         /*实际上是xlsx格式的文件  但以xls格式进行发送,好像也没什么问题*/
         response.setContentType("application/vnd.ms-excel;charset=utf-8");
         response.setHeader("Content-Disposition", "attachment;filename=" + responseExcelName + ".xlsx");
@@ -350,10 +363,10 @@ public class ExcelExport<R> {
      * @param response
      * @throws IOException
      */
-    public void responseAndClear(HttpServletResponse response) throws IOException {
-        String taskId = this.stopWrite();
+    public void responseByFilePath(HttpServletResponse response) throws IOException {
         try {
-            ExcelExport.response(response, PathFinder.getAbsoluteFilePath(taskId), excelName);
+            String taskId = this.stopWrite();
+            ExcelExport.response(PathFinder.getAbsoluteFilePath(taskId), excelName, response);
         } finally {
             /*清除临时文件*/
             ExcelExport.cleanTempFile(taskId);

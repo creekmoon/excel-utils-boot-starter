@@ -1,5 +1,6 @@
 package cn.jy.excelUtils.example;
 
+import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.util.RandomUtil;
 import cn.jy.excelUtils.converter.DateConverter;
 import cn.jy.excelUtils.converter.IntegerConverter;
@@ -7,7 +8,6 @@ import cn.jy.excelUtils.converter.LocalDateTimeConverter;
 import cn.jy.excelUtils.core.AsyncTaskState;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
-import cn.jy.excelUtils.core.PathFinder;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +18,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Map;
@@ -42,7 +43,7 @@ public class ExampleController {
                 .addTitle("生日", Student::getBirthday)
                 .addTitle("过期时间", Student::getExpTime)
                 .write(result)
-                .responseAndClear(response);
+                .responseByFilePath(response);
     }
 
 
@@ -63,7 +64,7 @@ public class ExampleController {
             excelExport.write(createStudentList(25_000));
         }
         /*返回数据*/
-        excelExport.responseAndClear(response);
+        excelExport.responseByFilePath(response);
     }
 
 
@@ -79,7 +80,7 @@ public class ExampleController {
                 .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
                 .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
                 .write(result)
-                .responseAndClear(response);
+                .responseByFilePath(response);
     }
 
     @GetMapping(value = "/exportExcel4")
@@ -178,7 +179,7 @@ public class ExampleController {
     public void getResultByTaskId(String taskId, HttpServletRequest request, HttpServletResponse response) throws IOException {
         try {
             /*响应导出结果*/
-            ExcelExport.response(response, PathFinder.getAbsoluteFilePath(taskId), "lalala.xlsx");
+            ExcelExport.response(taskId, "result[" + LocalDateTime.now().format(DateTimeFormatter.ofPattern(DatePattern.NORM_DATETIME_MINUTE_PATTERN)) + "].xlsx", response);
         } finally {
             /*清除临时文件*/
             ExcelExport.cleanTempFile(taskId);

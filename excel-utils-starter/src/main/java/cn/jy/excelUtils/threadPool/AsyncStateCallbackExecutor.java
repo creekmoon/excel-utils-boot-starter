@@ -59,7 +59,7 @@ public class AsyncStateCallbackExecutor {
                 log.error("任务已经完成,不应该再次执行! 如果此错误连续发生,请检查代码逻辑!");
                 return;
             }
-            if (asyncTaskState.getSuccessRowIndex() > 0) {
+            if (asyncTaskState.getSuccessRowCount() > 0) {
                 asyncTaskState.setWaiting(false);
             }
             asyncCallback.accept(asyncTaskState);

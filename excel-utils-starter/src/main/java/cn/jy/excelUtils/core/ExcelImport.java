@@ -1,12 +1,13 @@
 package cn.jy.excelUtils.core;
 
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.lang.UUID;
+import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
 import cn.hutool.poi.excel.sax.handler.RowHandler;
+import cn.jy.excelUtils.converter.MataConverter;
 import cn.jy.excelUtils.exception.CheckedExcelException;
 import cn.jy.excelUtils.exception.GlobalExceptionManager;
 import cn.jy.excelUtils.threadPool.AsyncImportExecutor;
@@ -26,8 +27,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static cn.jy.excelUtils.core.ExcelConstants.CONVERT_SUCCESS_MSG;
-import static cn.jy.excelUtils.core.ExcelConstants.IMPORT_SUCCESS_MSG;
+import static cn.jy.excelUtils.core.ExcelConstants.*;
 
 /**
  * @author JY
@@ -91,29 +91,10 @@ public class ExcelImport<R> {
     private ExcelReader initMemoryReader() throws IOException {
         ExcelReader reader = ExcelUtil.getReader(file.getInputStream());
         /*格式化器 将一切结果都转为String*/
-        reader.setCellEditor((Cell cell, Object value) -> object2String(value));
+        reader.setCellEditor((Cell cell, Object value) -> MataConverter.parse(value));
         return reader;
     }
 
-
-    /**
-     * 全局默认数据转换器 将所有的数值都转换成String
-     *
-     * @param value
-     * @return
-     */
-    private String object2String(Object value) {
-        if (value == null) {
-            return "";
-        }
-        if (value instanceof String) {
-            return StrUtil.trim((String) value);
-        }
-        if (value instanceof Date) {
-            return DateUtil.format((Date) value, "yyyy-MM-dd HH:mm:ss");
-        }
-        return String.valueOf(value);
-    }
 
     /**
      * 初始化SAX读取器
@@ -126,10 +107,6 @@ public class ExcelImport<R> {
         excelExport.taskId = asyncTaskState.taskId;
         /*转换器名称队列*/
         List<String> convertNamesList = new ArrayList<>(converts.keySet());
-        /*转换器队列*/
-        ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
-        /*setter队列*/
-        ArrayList<BiConsumer> setterList = new ArrayList<>(consumers.values());
 
         /*返回一个Sax读取器*/
         return new Excel07SaxReader(new RowHandler() {
@@ -137,51 +114,44 @@ public class ExcelImport<R> {
             public void doAfterAllAnalysed() {
                 /*sheet读取结束时*/
                 excelExport.stopWrite();
+                ExcelExport.cleanTempFile(excelExport.taskId);
             }
 
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
-                /*只读取第一个sheet*/
-                if (sheetIndex != 0) {
+                /*只读取第一个sheet 并从第二行开始  因为第一行约定是标题*/
+                if (sheetIndex != 0 || rowIndex == 0) {
                     return;
                 }
-                /*跳过第一行*/
-                if (rowIndex == 0) {
-                    return;
-                }
-                /*基础Excel解析*/
-                HashMap<String, Object> row = new LinkedHashMap<>();
+                /*Excel解析原生的数据*/
+                HashMap<String, Object> rawRowData = new LinkedHashMap<>();
                 for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
-                    row.put(convertNamesList.get(colIndex), object2String(rowList.get(colIndex)));
+                    rawRowData.put(convertNamesList.get(colIndex), MataConverter.parse(rowList.get(colIndex)));
                 }
-                /*转换成对象*/
+                /*转换成业务对象*/
                 try {
-                    rowConvert(row);
-                    row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
-                } catch (Exception e) {
-                    /*遇到异常*/
-                    String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                    asyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
-                    row.put(RESULT_TITLE, exceptionMsg);
-                } finally {
-                    /*移除转换成功结果*/
-                    object2Row.remove(currentObject);
-                }
-                /*消费这个rowData*/
-                try {
-                    asyncTaskState.tryRowIndex++;
+                    /*转换*/
+                    asyncTaskState.tryRowCount++;
+                    rowConvert(rawRowData);
+                    rawRowData.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
+                    /*消费*/
                     dataConsumer.accept(currentObject);
-                    asyncTaskState.successRowIndex++;
+                    asyncTaskState.successRowCount++;
+                    rawRowData.put(RESULT_TITLE, IMPORT_SUCCESS_MSG);
                 } catch (Exception e) {
+                    /*遇到异常 获取异常信息*/
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                    asyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
-                    row.put(RESULT_TITLE, exceptionMsg);
+                    /*写入异步状态 行号+1是因为Excel没有第0行*/
+                    asyncTaskState.getErrorReport().put(rowIndex + 1, exceptionMsg);
+                    /*写入导出Excel结果*/
+                    rawRowData.put(RESULT_TITLE, exceptionMsg);
                 } finally {
-                    excelExport.writeByMap(Collections.singletonList(row));
+                    excelExport.writeByMap(Collections.singletonList(rawRowData));
                 }
                 /*如果异常数量达到指定的值时 直接中断本次导入*/
                 if (ASYNC_IMPORT_FAIL >= 0 && asyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_FAIL) {
                     excelExport.stopWrite();
+                    ExcelExport.cleanTempFile(excelExport.taskId);
                     throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");
                 }
             }
@@ -258,7 +228,7 @@ public class ExcelImport<R> {
     }
 
     public ExcelImport<R> read(ExConsumer<R> dataConsumer, ReadStrategy readStrategy) {
-        List<R> read = read(readStrategy);
+        List<R> read = readAll(readStrategy);
         for (int i = 0; i < read.size(); i++) {
             try {
                 dataConsumer.accept(read.get(i));
@@ -270,13 +240,8 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public List<R> read() {
-        // 读取Excel中的对象, 如果存在任何一行转换失败,则返回空List
-        return read(ReadStrategy.RETURN_EMPTY_LIST_IF_EXIST_FAIL);
-    }
-
     @SneakyThrows
-    public List<R> read(ReadStrategy readStrategy) {
+    public List<R> readAll(ReadStrategy readStrategy) {
         semaphore.acquire();
         try {
             /*初始化读取器*/
@@ -323,7 +288,7 @@ public class ExcelImport<R> {
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
         ExcelExport export = ExcelExport.create("result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");
         export.writeByMap(rows);
-        export.responseAndClear(response);
+        export.responseByFilePath(response);
     }
 
     /**
@@ -356,15 +321,20 @@ public class ExcelImport<R> {
             /*检查必填项/检查可填项*/
             if (StrUtil.isBlank(value)) {
                 if (mustExistTitles.contains(entry.getKey())) {
-                    throw new CheckedExcelException(entry.getKey() + "为必填项!");
+                    throw new CheckedExcelException(StrFormatter.format(FIELD_LACK_MSG, entry.getKey()));
                 }
                 if (skipEmptyTitles.contains(entry.getKey())) {
                     continue;
                 }
             }
             /*转换数据*/
-            Object convertValue = converts.get(entry.getKey()).apply(value);
-            consumers.get(entry.getKey()).accept(currentObject, convertValue);
+            try {
+                Object convertValue = converts.get(entry.getKey()).apply(value);
+                consumers.get(entry.getKey()).accept(currentObject, convertValue);
+            } catch (Exception e) {
+                log.error("EXCEL导入数据转换失败！", e);
+                throw new CheckedExcelException(StrFormatter.format(ExcelConstants.CONVERT_FAIL_MSG, entry.getKey()));
+            }
         }
     }
 
