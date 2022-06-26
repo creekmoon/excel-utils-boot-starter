@@ -90,6 +90,7 @@ public class ExcelExport<R> {
 
     /**
      * 异步写入
+     *
      * @param dataSupplier  数据提供者 当数据Size==0时 自动停止写入
      * @param asyncCallback 异步回调方法,每隔1.5秒回调一次  通常这里可以将AsyncTaskState进行保存
      * @return
@@ -168,7 +169,7 @@ public class ExcelExport<R> {
                                             }
                                             if (writeStrategy == WriteStrategy.STOP_ON_ERROR) {
                                                 String taskId = stopWrite();
-                                                CleanTempFilesExecutor.cleanTempFile(taskId);
+                                                ExcelExport.cleanTempFile(taskId);
                                                 log.error("生成Excel获取数据值时发生错误!", exception);
                                                 throw new RuntimeException("生成Excel获取数据值时发生错误!");
                                             }
@@ -180,6 +181,10 @@ public class ExcelExport<R> {
                         .collect(Collectors.toList());
         getBigExcelWriter().write(rows);
         return this;
+    }
+
+    public static void cleanTempFile(String taskId) {
+        CleanTempFilesExecutor.cleanTempFile(taskId);
     }
 
     /**
@@ -339,14 +344,19 @@ public class ExcelExport<R> {
 
     }
 
-    /*将文件响应给请求*/
-    public void response(HttpServletResponse response) throws IOException {
+    /**
+     * 响应并清除
+     *
+     * @param response
+     * @throws IOException
+     */
+    public void responseAndClear(HttpServletResponse response) throws IOException {
         String taskId = this.stopWrite();
         try {
             ExcelExport.response(response, PathFinder.getAbsoluteFilePath(taskId), excelName);
         } finally {
             /*清除临时文件*/
-            CleanTempFilesExecutor.cleanTempFile(taskId);
+            ExcelExport.cleanTempFile(taskId);
         }
     }
 

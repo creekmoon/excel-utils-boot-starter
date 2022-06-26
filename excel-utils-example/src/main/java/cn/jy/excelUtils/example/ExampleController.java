@@ -8,7 +8,6 @@ import cn.jy.excelUtils.core.AsyncTaskState;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
 import cn.jy.excelUtils.core.PathFinder;
-import cn.jy.excelUtils.threadPool.CleanTempFilesExecutor;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,7 +42,7 @@ public class ExampleController {
                 .addTitle("生日", Student::getBirthday)
                 .addTitle("过期时间", Student::getExpTime)
                 .write(result)
-                .response(response);
+                .responseAndClear(response);
     }
 
 
@@ -64,7 +63,7 @@ public class ExampleController {
             excelExport.write(createStudentList(25_000));
         }
         /*返回数据*/
-        excelExport.response(response);
+        excelExport.responseAndClear(response);
     }
 
 
@@ -80,7 +79,7 @@ public class ExampleController {
                 .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
                 .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
                 .write(result)
-                .response(response);
+                .responseAndClear(response);
     }
 
     @GetMapping(value = "/exportExcel4")
@@ -144,7 +143,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcel2")
-    public void importExcel2(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public AsyncTaskState importExcel2(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
         AsyncTaskState asyncTaskState = ExcelImport.create(file, Student::new)
@@ -165,6 +164,7 @@ public class ExampleController {
         //判断这个方法的执行时间
         long end = System.currentTimeMillis();
         System.out.println("执行时间:" + (end - start));
+        return asyncTaskState;
     }
 
     @GetMapping(value = "/followTaskId")
@@ -181,7 +181,7 @@ public class ExampleController {
             ExcelExport.response(response, PathFinder.getAbsoluteFilePath(taskId), "lalala.xlsx");
         } finally {
             /*清除临时文件*/
-            CleanTempFilesExecutor.cleanTempFile(taskId);
+            ExcelExport.cleanTempFile(taskId);
         }
     }
 

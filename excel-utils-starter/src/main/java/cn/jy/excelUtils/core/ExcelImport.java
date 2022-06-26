@@ -323,7 +323,7 @@ public class ExcelImport<R> {
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
         ExcelExport export = ExcelExport.create("result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");
         export.writeByMap(rows);
-        export.response(response);
+        export.responseAndClear(response);
     }
 
     /**
