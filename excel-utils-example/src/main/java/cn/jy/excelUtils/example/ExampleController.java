@@ -1,8 +1,9 @@
 package cn.jy.excelUtils.example;
 
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.RandomUtil;
+import cn.jy.excelUtils.converter.DateConverter;
 import cn.jy.excelUtils.converter.IntegerConverter;
+import cn.jy.excelUtils.converter.LocalDateTimeConverter;
 import cn.jy.excelUtils.core.AsyncTaskState;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
@@ -106,8 +107,6 @@ public class ExampleController {
     }
 
 
-
-
     /**
      * 导入
      *
@@ -119,12 +118,13 @@ public class ExampleController {
     public void importExcel(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
-
         ExcelImport.create(file, Student::new)
-                .addConvert("姓名", Student::setUserName)
-                .addConvert("年龄", Integer::valueOf, Student::setAge)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
-                .addConvert("过期时间", x -> DateUtil.parse(x.substring(0, 10)), Student::setBirthday)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
                 .read(student -> {
                     System.out.println(student);
                 })
@@ -144,14 +144,16 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcel2")
-    public void importExcelAsync(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void importExcel2(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
         AsyncTaskState asyncTaskState = ExcelImport.create(file, Student::new)
-                .addConvert("姓名", Student::setUserName)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
-                .addConvert("过期时间", x -> DateUtil.parse(x.substring(0, 10)), Student::setBirthday)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
                 .readAsync(
                         student -> {
                             //System.out.println(student);

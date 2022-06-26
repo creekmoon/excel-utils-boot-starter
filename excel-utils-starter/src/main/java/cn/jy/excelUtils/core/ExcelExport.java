@@ -286,7 +286,7 @@ public class ExcelExport<R> {
      *
      * @return taskId
      */
-    private String stopWrite() {
+    public String stopWrite() {
         this.autoSetColumnWidth();
         getBigExcelWriter().close();
         return taskId;

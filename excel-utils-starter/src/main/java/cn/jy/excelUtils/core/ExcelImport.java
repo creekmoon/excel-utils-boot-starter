@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
+import cn.hutool.poi.excel.sax.handler.RowHandler;
 import cn.jy.excelUtils.exception.CheckedExcelException;
 import cn.jy.excelUtils.exception.GlobalExceptionManager;
 import cn.jy.excelUtils.threadPool.AsyncImportExecutor;
@@ -121,52 +122,68 @@ public class ExcelImport<R> {
      * @throws IOException
      */
     Excel07SaxReader initSaxReader(AsyncTaskState asyncTaskState, ExConsumer<R> dataConsumer) {
+        ExcelExport<Object> excelExport = ExcelExport.create("importResult");
+        excelExport.taskId = asyncTaskState.taskId;
+        /*转换器名称队列*/
+        List<String> convertNamesList = new ArrayList<>(converts.keySet());
         /*转换器队列*/
         ArrayList<ExFunction> convertsList = new ArrayList<>(converts.values());
         /*setter队列*/
         ArrayList<BiConsumer> setterList = new ArrayList<>(consumers.values());
 
         /*返回一个Sax读取器*/
-        return new Excel07SaxReader((sheetIndex, rowIndex, rowList) -> {
-            /*只读取第一个sheet*/
-            if (sheetIndex != 0) {
-                return;
+        return new Excel07SaxReader(new RowHandler() {
+            @Override
+            public void doAfterAllAnalysed() {
+                /*sheet读取结束时*/
+                excelExport.stopWrite();
             }
-            /*跳过第一行*/
-            if (rowIndex == 0) {
-                return;
-            }
-            /*读取当前行的每一个属性 最终得到rowData*/
-            R rowData = newObjectSupplier.get();
-            for (int colIndex = 0; colIndex < convertsList.size(); colIndex++) {
-                /*先把所有读到的数据转为String*/
-                String value = object2String(rowList.get(colIndex));
-                /*获取当前的转换器*/
-                ExFunction converter = convertsList.get(colIndex);
-                BiConsumer setter = setterList.get(colIndex);
-                Object apply = null;
+
+            @Override
+            public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
+                /*只读取第一个sheet*/
+                if (sheetIndex != 0) {
+                    return;
+                }
+                /*跳过第一行*/
+                if (rowIndex == 0) {
+                    return;
+                }
+                /*基础Excel解析*/
+                HashMap<String, Object> row = new LinkedHashMap<>();
+                for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
+                    row.put(convertNamesList.get(colIndex), object2String(rowList.get(colIndex)));
+                }
+                /*转换成对象*/
                 try {
-                    apply = converter.apply(value);
-                    setter.accept(rowData, apply);
+                    rowConvert(row);
+                    row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
                 } catch (Exception e) {
                     /*遇到异常*/
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
                     asyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
+                    row.put(RESULT_TITLE, exceptionMsg);
+                } finally {
+                    /*移除转换成功结果*/
+                    object2Row.remove(currentObject);
                 }
-            }
-            /*消费这个rowData*/
-            try {
-                asyncTaskState.tryRowIndex++;
-                dataConsumer.accept(rowData);
-                asyncTaskState.successRowIndex++;
-
-            } catch (Exception e) {
-                String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
-                asyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
-            }
-            /*如果异常数量达到指定的值时 直接中断本次导入*/
-            if (ASYNC_IMPORT_FAIL >= 0 && asyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_FAIL) {
-                throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");
+                /*消费这个rowData*/
+                try {
+                    asyncTaskState.tryRowIndex++;
+                    dataConsumer.accept(currentObject);
+                    asyncTaskState.successRowIndex++;
+                } catch (Exception e) {
+                    String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
+                    asyncTaskState.getErrorReport().put(rowIndex, exceptionMsg);
+                    row.put(RESULT_TITLE, exceptionMsg);
+                } finally {
+                    excelExport.writeByMap(Collections.singletonList(row));
+                }
+                /*如果异常数量达到指定的值时 直接中断本次导入*/
+                if (ASYNC_IMPORT_FAIL >= 0 && asyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_FAIL) {
+                    excelExport.stopWrite();
+                    throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");
+                }
             }
         });
     }
@@ -268,15 +285,15 @@ public class ExcelImport<R> {
             boolean existsFail = false;
             rows = memoryReader.readAll();
             for (Map<String, Object> row : rows) {
-                currentObject = newObjectSupplier.get();
-                object2Row.put(currentObject, row);
                 try {
-                    rowCheckMustExist(row);
                     rowConvert(row);
+                    /*转换成功*/
+                    object2Row.put(currentObject, row);
                     row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
                 } catch (Exception e) {
                     existsFail = true;
                     row.put(RESULT_TITLE, GlobalExceptionManager.getExceptionMsg(e));
+                    /*转换失败*/
                     object2Row.remove(currentObject);
                 }
             }
@@ -323,31 +340,31 @@ public class ExcelImport<R> {
     }
 
 
-    /*行数据转换*/
+    /**
+     * 行转换
+     *
+     * @param row 实际上是Map<String, String>对象
+     * @throws Exception
+     */
     private void rowConvert(Map<String, Object> row) throws Exception {
-
+        /*初始化空对象*/
+        currentObject = newObjectSupplier.get();
         /*执行convert*/
         for (Map.Entry<String, Object> entry : row.entrySet()) {
+
             String value = Optional.ofNullable(entry.getValue()).map(x -> (String) x).orElse("");
-            if (skipEmptyTitles.contains(entry.getKey()) && StrUtil.isBlank(value)) {
-                continue;
-            }
-            Object convertValue = converts.get(entry.getKey()).apply(value);
-            consumers.get(entry.getKey()).accept(currentObject, convertValue);
-        }
-    }
-
-    /*校验必填项*/
-    private void rowCheckMustExist(Map<String, Object> row) throws CheckedExcelException {
-
-        /*检查必填项*/
-        for (String key : row.keySet()) {
-            if (mustExistTitles.contains(key)) {
-                Object str = row.get(key);
-                if (str == null || StrUtil.isBlank((String) str)) {
-                    throw new CheckedExcelException(key + "为必填项!");
+            /*检查必填项/检查可填项*/
+            if (StrUtil.isBlank(value)) {
+                if (mustExistTitles.contains(entry.getKey())) {
+                    throw new CheckedExcelException(entry.getKey() + "为必填项!");
+                }
+                if (skipEmptyTitles.contains(entry.getKey())) {
+                    continue;
                 }
             }
+            /*转换数据*/
+            Object convertValue = converts.get(entry.getKey()).apply(value);
+            consumers.get(entry.getKey()).accept(currentObject, convertValue);
         }
     }
 
