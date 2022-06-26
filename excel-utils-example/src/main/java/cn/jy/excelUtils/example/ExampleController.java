@@ -43,7 +43,7 @@ public class ExampleController {
                 .addTitle("生日", Student::getBirthday)
                 .addTitle("过期时间", Student::getExpTime)
                 .write(result)
-                .responseByFilePath(response);
+                .response(response);
     }
 
 
@@ -64,7 +64,7 @@ public class ExampleController {
             excelExport.write(createStudentList(25_000));
         }
         /*返回数据*/
-        excelExport.responseByFilePath(response);
+        excelExport.response(response);
     }
 
 
@@ -80,7 +80,7 @@ public class ExampleController {
                 .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
                 .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
                 .write(result)
-                .responseByFilePath(response);
+                .response(response);
     }
 
     @GetMapping(value = "/exportExcel4")
