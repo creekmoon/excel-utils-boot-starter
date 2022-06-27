@@ -46,7 +46,7 @@ public class ExcelImport<R> {
     /**
      * 导入结果的title
      */
-    public static int ASYNC_IMPORT_FAIL = -1;
+    public static int ASYNC_IMPORT_MAX_FAIL = -1;
 
 
     /* key=title  value=执行器 */
@@ -142,14 +142,14 @@ public class ExcelImport<R> {
                     /*遇到异常 获取异常信息*/
                     String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
                     /*写入异步状态 行号+1是因为Excel没有第0行*/
-                    asyncTaskState.getErrorReport().put(rowIndex + 1, exceptionMsg);
+                    asyncTaskState.addErrorMsg(rowIndex + 1, exceptionMsg);
                     /*写入导出Excel结果*/
                     rawRowData.put(RESULT_TITLE, exceptionMsg);
                 } finally {
                     excelExport.writeByMap(Collections.singletonList(rawRowData));
                 }
                 /*如果异常数量达到指定的值时 直接中断本次导入*/
-                if (ASYNC_IMPORT_FAIL >= 0 && asyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_FAIL) {
+                if (ASYNC_IMPORT_MAX_FAIL >= 0 && asyncTaskState.getErrorReport().size() >= ASYNC_IMPORT_MAX_FAIL) {
                     excelExport.stopWrite();
                     ExcelExport.cleanTempFile(excelExport.taskId);
                     throw new RuntimeException("异常数量过多，终止导入。请检查Excel文件内容是否正确");

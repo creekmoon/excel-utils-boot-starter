@@ -37,6 +37,7 @@ public class ExcelUtilsAutoConfiguration implements ApplicationContextAware {
         CleanTempFilesExecutor.init(1);
         /*初始化最大的导入导出执行数量*/
         ExcelImport.semaphore = new Semaphore(excelUtilsConfig.getImportMaxParallel());
+        ExcelImport.ASYNC_IMPORT_MAX_FAIL = excelUtilsConfig.getAsyncImportMaxFail();
     }
 
     @Override

@@ -23,7 +23,6 @@ public class ExcelUtilsConfig {
      * 使用异步导入时,如果导入累计出现异常超过最大次数,则中断导入
      */
     private int asyncImportMaxFail = 100;
-
     /**
      * 临时文件的保留寿命 单位分钟
      */

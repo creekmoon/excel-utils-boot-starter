@@ -158,6 +158,7 @@ public class ExampleController {
                         student -> {
                             //System.out.println(student);
                         }, state -> {
+                            taskId2TaskState.put(state.getTaskId(), state);
                             System.out.println(state);
                         }
                 );

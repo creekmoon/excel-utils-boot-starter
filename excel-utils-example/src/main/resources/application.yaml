@@ -6,11 +6,12 @@ Spring:
       matching-strategy: ant_path_matcher
   servlet:
     multipart:
-      max-file-size: 30MB
-      max-request-size: 50MB
+      max-file-size: 64MB
+      max-request-size: 100MB
 excel-utils:
   import-max-parallel: 4
   async-refresh-milliseconds: 1500
+  async-import-max-fail: 100
 swagger-config:
   enable: true
   protocol: http
