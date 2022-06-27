@@ -38,6 +38,9 @@ public class AsyncStateCallbackExecutor {
         if (threadPoolExecutor != null) {
             threadPoolExecutor.shutdown();
         }
+        if (corePoolSize <= 0) {
+            corePoolSize = 1;
+        }
         threadPoolExecutor = new ScheduledThreadPoolExecutor(corePoolSize, namedThreadFactory);
 
     }

@@ -61,7 +61,7 @@ public class ExampleController {
                 .addTitle("过期时间", Student::getExpTime);
         //模拟查询
         for (int i = 0; i < 3; i++) {
-            excelExport.write(createStudentList(25_000));
+            excelExport.write(createStudentList(250_000));
         }
         /*返回数据*/
         excelExport.response(response);

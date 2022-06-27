@@ -32,12 +32,13 @@ public class ExcelUtilsAutoConfiguration implements ApplicationContextAware {
         GlobalExceptionManager.excelUtilsExceptionHandlers.sort(Comparator.comparing(ExcelUtilsExceptionHandler::getOrder));
         /*初始化线程池配置*/
         AsyncStateCallbackExecutor.REFRESH_MILLISECONDS = excelUtilsConfig.getAsyncRefreshMilliseconds();
-        AsyncStateCallbackExecutor.init(1);
+        AsyncStateCallbackExecutor.init(excelUtilsConfig.getImportMaxParallel() / 4);
         CleanTempFilesExecutor.TEMP_FILE_LIFE_MINUTES = excelUtilsConfig.getTempFileLifeMinutes();
         CleanTempFilesExecutor.init(1);
         /*初始化最大的导入导出执行数量*/
         ExcelImport.semaphore = new Semaphore(excelUtilsConfig.getImportMaxParallel());
     }
+
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
         this.applicationContext = applicationContext;
