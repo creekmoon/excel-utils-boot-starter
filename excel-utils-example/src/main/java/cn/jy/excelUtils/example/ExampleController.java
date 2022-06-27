@@ -8,6 +8,7 @@ import cn.jy.excelUtils.converter.LocalDateTimeConverter;
 import cn.jy.excelUtils.core.AsyncTaskState;
 import cn.jy.excelUtils.core.ExcelExport;
 import cn.jy.excelUtils.core.ExcelImport;
+import cn.jy.excelUtils.exception.CheckedExcelException;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -115,6 +116,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcel1")
+    @ApiOperation("同步导入数据")
     public void importExcel(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
@@ -144,6 +146,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcel2")
+    @ApiOperation("异步导入数据")
     public AsyncTaskState importExcel2(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
@@ -156,7 +159,56 @@ public class ExampleController {
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
                 .readAsync(
                         student -> {
-                            //System.out.println(student);
+                            System.out.println(student);
+                        }, state -> {
+                            taskId2TaskState.put(state.getTaskId(), state);
+                            System.out.println(state);
+                        }
+                );
+        System.out.println(asyncTaskState);
+        //判断这个方法的执行时间
+        long end = System.currentTimeMillis();
+        System.out.println("执行时间:" + (end - start));
+        return asyncTaskState;
+    }
+
+
+    /**
+     * 导入
+     *
+     * @param request
+     * @param response
+     * @throws IOException
+     */
+    @PostMapping(value = "/importExcel3")
+    @ApiOperation("异步导入数据(随机发生异常)")
+    public AsyncTaskState importExcel3(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        //判断这个方法的执行时间
+        long start = System.currentTimeMillis();
+        AsyncTaskState asyncTaskState = ExcelImport.create(file, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .readAsync(
+                        student -> {
+                            /*模拟发生异常的情况*/
+                            /*需要实现ExcelUtilsExceptionHandler接口,并交给Spring管理才会抛出异常信息*/
+                            int i = RandomUtil.randomInt(1, 100);
+                            if (i == 20) {
+                                /*导入结果: 我是自定义的异常信息*/
+                                throw new CheckedExcelException("我是自定义的异常信息");
+                            }
+                            if (i == 40) {
+                                /*导入结果: 导入异常!请联系管理员!*/
+                                throw new Exception("我是自定义的异常信息");
+                            }
+                            if (i == 50) {
+                                /*导入结果: 导入异常!请联系管理员!*/
+                                throw new RuntimeException("我是自定义的异常信息");
+                            }
                         }, state -> {
                             taskId2TaskState.put(state.getTaskId(), state);
                             System.out.println(state);
