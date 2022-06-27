@@ -28,7 +28,7 @@
         </dependency>
         <dependency>
             <groupId>io.github.creekmoon</groupId>
-            <artifactId>excel-utils-starter</artifactId>
+            <artifactId>excel-utils-boot-starter</artifactId>
             <version>${current.version}</version>
         </dependency>
         <!-- swagger start -->
