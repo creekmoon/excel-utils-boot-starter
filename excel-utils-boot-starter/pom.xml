@@ -46,6 +46,43 @@
         <maven.compiler.target>8</maven.compiler.target>
     </properties>
 
+    <description>
+        一个简易操作Excel的工具类
+    </description>
+    <url>https://github.com/creekmoon/excel-utils-boot-starter</url>
+
+    <!--注意 install会有报错, 但是不会影响结果-->
+    <!--这是因为javadoc解析出的格式错误, 已经启用<doclint>none</doclint>忽略了错误-->
+
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <issueManagement>
+        <system>github</system>
+        <url>https://github.com/creekmoon/excel-utils-boot-starter/issues</url>
+    </issueManagement>
+
+    <scm>
+        <connection>scm:git:https://github.com/creekmoon/excel-utils-boot-starter.git</connection>
+        <developerConnection>scm:git:https://github.com/creekmoon/excel-utils-boot-starter.git</developerConnection>
+        <url>https://github.com/creekmoon/excel-utils-boot-starter</url>
+    </scm>
+
+    <developers>
+        <developer>
+            <name>JY</name>
+            <email>creekmoon@hotmail.com</email>
+            <url>https://github.com/creekmoon</url>
+        </developer>
+    </developers>
+
+
     <distributionManagement>
         <repository>
             <id>maven_oss_push</id>

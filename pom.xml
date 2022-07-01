@@ -93,6 +93,34 @@
         <xercesImpl.version>2.11.0</xercesImpl.version>
     </properties>
 
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <issueManagement>
+        <system>github</system>
+        <url>https://github.com/creekmoon/excel-utils-boot-starter/issues</url>
+    </issueManagement>
+
+    <scm>
+        <connection>scm:git:https://github.com/creekmoon/excel-utils-boot-starter.git</connection>
+        <developerConnection>scm:git:https://github.com/creekmoon/excel-utils-boot-starter.git</developerConnection>
+        <url>https://github.com/creekmoon/excel-utils-boot-starter</url>
+    </scm>
+
+    <developers>
+        <developer>
+            <name>JY</name>
+            <email>creekmoon@hotmail.com</email>
+            <url>https://github.com/creekmoon</url>
+        </developer>
+    </developers>
+
     <distributionManagement>
         <repository>
             <id>maven_oss_push</id>
