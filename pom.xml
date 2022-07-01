@@ -94,6 +94,11 @@
     </properties>
 
 
+    <description>
+        此项目不包含功能,请引入excel-utils-boot-starter
+    </description>
+    <url>https://github.com/creekmoon/excel-utils-boot-starter</url>
+
     <licenses>
         <license>
             <name>The Apache Software License, Version 2.0</name>
