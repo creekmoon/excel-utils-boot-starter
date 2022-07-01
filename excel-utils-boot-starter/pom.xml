@@ -4,11 +4,12 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <groupId>io.github.creekmoon</groupId>
-        <artifactId>excel-utils-project</artifactId>
+        <artifactId>excel-utils-parent</artifactId>
         <version>1.0.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
+    <name>excel-utils-boot-starter</name>
     <artifactId>excel-utils-boot-starter</artifactId>
     <version>${current.version}</version>
     <dependencies>

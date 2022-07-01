@@ -5,7 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.creekmoon</groupId>
-    <artifactId>excel-utils-project</artifactId>
+    <name>excel-utils-parent</name>
+    <artifactId>excel-utils-parent</artifactId>
     <packaging>pom</packaging>
     <version>1.0.1</version>
     <modules>
