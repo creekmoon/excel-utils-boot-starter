@@ -40,7 +40,7 @@ public class CleanTempFilesExecutor {
      */
     public static void cleanTempFile(String taskId) {
         threadPoolExecutor.schedule(() -> {
-            if (FileUtil.del(PathFinder.getAbsoluteFilePath(taskId))) {
+            if (!FileUtil.del(PathFinder.getAbsoluteFilePath(taskId))) {
                 log.warn("清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(taskId));
             }
         }, TEMP_FILE_LIFE_MINUTES, TimeUnit.MINUTES);

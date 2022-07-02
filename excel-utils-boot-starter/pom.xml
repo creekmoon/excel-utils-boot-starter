@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.github.creekmoon</groupId>
         <artifactId>excel-utils-parent</artifactId>
-        <version>1.0.1</version>
+        <version>1.0.2</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -105,6 +105,14 @@
                     <configuration>
                         <source>1.8</source>
                         <target>1.8</target>
+                        <!--配置注解处理器 貌似不配置也会有提示-->
+                        <annotationProcessors>
+                            <annotationProcessor>
+                                org.springframework.boot.configurationprocessor.ConfigurationMetadataAnnotationProcessor
+                            </annotationProcessor>
+                            <annotationProcessor>lombok.launch.AnnotationProcessorHider$AnnotationProcessor
+                            </annotationProcessor>
+                        </annotationProcessors>
                     </configuration>
                 </plugin>
                 <!--定义源码解析插件-->
