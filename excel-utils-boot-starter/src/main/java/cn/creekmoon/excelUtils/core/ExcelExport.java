@@ -170,11 +170,12 @@ public class ExcelExport<R> {
                                         } catch (Exception exception) {
                                             if (writeStrategy == WriteStrategy.CONTINUE_ON_ERROR) {
                                                 // nothing to do
+                                                log.info("[Excel构建]生成Excel获取数据值时发生错误!已经忽略错误并设置为NULL值!", exception);
                                             }
                                             if (writeStrategy == WriteStrategy.STOP_ON_ERROR) {
                                                 String taskId = stopWrite();
                                                 ExcelExport.cleanTempFile(taskId);
-                                                log.error("生成Excel获取数据值时发生错误!", exception);
+                                                log.error("[Excel构建]生成Excel获取数据值时发生错误!", exception);
                                                 throw new RuntimeException("生成Excel获取数据值时发生错误!");
                                             }
                                         }
