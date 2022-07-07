@@ -11,8 +11,6 @@ import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.util.RandomUtil;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -284,19 +282,5 @@ public class ExampleController {
         return result;
     }
 
-    /**
-     * 注意导出的对象不能重写 equal和hashCode方法
-     */
-    @Setter
-    @Getter
-    public static class Student {
 
-
-        String userName;
-        String fullName;
-        String email;
-        Integer age;
-        Date birthday;
-        LocalDateTime expTime;
-    }
 }
