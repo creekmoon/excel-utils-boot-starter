@@ -1,5 +1,10 @@
 package cn.creekmoon.excelUtils.core;
 
+import cn.creekmoon.excelUtils.converter.MataConverter;
+import cn.creekmoon.excelUtils.exception.CheckedExcelException;
+import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
+import cn.creekmoon.excelUtils.threadPool.AsyncImportExecutor;
+import cn.creekmoon.excelUtils.threadPool.AsyncStateCallbackExecutor;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
@@ -7,11 +12,6 @@ import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
 import cn.hutool.poi.excel.sax.handler.RowHandler;
-import cn.creekmoon.excelUtils.converter.MataConverter;
-import cn.creekmoon.excelUtils.exception.CheckedExcelException;
-import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
-import cn.creekmoon.excelUtils.threadPool.AsyncImportExecutor;
-import cn.creekmoon.excelUtils.threadPool.AsyncStateCallbackExecutor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -314,9 +314,14 @@ public class ExcelImport<R> {
     private void rowConvert(Map<String, Object> row) throws Exception {
         /*初始化空对象*/
         currentObject = newObjectSupplier.get();
+        /*最大转换次数*/
+        int maxConvertCount = consumers.keySet().size();
         /*执行convert*/
         for (Map.Entry<String, Object> entry : row.entrySet()) {
-
+            /*如果超过最大次数 不再进行读取*/
+            if (maxConvertCount-- <= 0) {
+                break;
+            }
             String value = Optional.ofNullable(entry.getValue()).map(x -> (String) x).orElse("");
             /*检查必填项/检查可填项*/
             if (StrUtil.isBlank(value)) {
