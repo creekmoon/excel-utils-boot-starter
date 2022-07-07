@@ -1,5 +1,8 @@
 package cn.creekmoon.excelUtils.core;
 
+import cn.creekmoon.excelUtils.threadPool.AsyncExportExecutor;
+import cn.creekmoon.excelUtils.threadPool.AsyncStateCallbackExecutor;
+import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.lang.UUID;
@@ -7,9 +10,6 @@ import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.BigExcelWriter;
 import cn.hutool.poi.excel.ExcelUtil;
-import cn.creekmoon.excelUtils.threadPool.AsyncExportExecutor;
-import cn.creekmoon.excelUtils.threadPool.AsyncStateCallbackExecutor;
-import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,14 +29,10 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class ExcelExport<R> {
-
-    private List<Title<R>> titles = new ArrayList<>();
-
-
     /**
-     * 打印调试内容
+     * 表头集合
      */
-    private boolean debugger = false;
+    private List<Title<R>> titles = new ArrayList<>();
     /* 多级表头时会用到 全局标题深度  initTitle方法会给其赋值
      *
      *   |       title               |     深度=3    rowIndex=0
@@ -44,9 +40,17 @@ public class ExcelExport<R> {
      *   |title1|title2|title3|title4|     深度=1    rowIndex=2
      * */
     public Integer MAX_TITLE_DEPTH = null;
-    /* 多级表头时会用到    深度 和 标题集合的映射关系*/
+    /* 多级表头时会用到  深度和标题的映射关系*/
     HashMap<Integer, List<Title>> depth2Titles = new HashMap<>();
 
+
+    /*当前Excel标签的名称 初始化后会自动赋值 不要在这里赋初值*/
+    private String currentSheetName;
+
+    /**
+     * 打印调试内容
+     */
+    private boolean debugger = false;
     /*唯一识别名称*/
     public String taskId;
     /*自定义的名称*/
@@ -190,7 +194,7 @@ public class ExcelExport<R> {
     /**
      * 初始化标题
      */
-    public void initTitles() {
+    private void initTitles() {
 
         /*如果已经初始化完毕 则不进行初始化*/
         if (this.MAX_TITLE_DEPTH != null) {
@@ -287,6 +291,15 @@ public class ExcelExport<R> {
     }
 
     /**
+     * 重置标题 当需要再次使用标题时
+     */
+    private void restTitles() {
+        this.MAX_TITLE_DEPTH = null;
+        this.titles.clear();
+        this.depth2Titles.clear();
+    }
+
+    /**
      * 停止写入
      *
      * @return taskId
@@ -375,7 +388,7 @@ public class ExcelExport<R> {
 
     private BigExcelWriter getBigExcelWriter() {
         if (bigExcelWriter == null) {
-            bigExcelWriter = ExcelUtil.getBigWriter(PathFinder.getAbsoluteFilePath(taskId));
+            bigExcelWriter = ExcelUtil.getBigWriter(PathFinder.getAbsoluteFilePath(taskId), currentSheetName);
         }
         return bigExcelWriter;
     }
@@ -480,6 +493,21 @@ public class ExcelExport<R> {
             }
             return depth2Title;
         }
+    }
+
+    /**
+     * 切换到新的标签页,注意不能再切换回来
+     */
+    public ExcelExport<R> switchSheet(String sheetName) {
+        /*如果已经生成过标题, 那么重置标题*/
+        if (MAX_TITLE_DEPTH != null) {
+            restTitles();
+        }
+        /*切换到对应的标签页*/
+        this.currentSheetName = sheetName;
+        this.autoSetColumnWidth();
+        getBigExcelWriter().setSheet(sheetName);
+        return this;
     }
 
 

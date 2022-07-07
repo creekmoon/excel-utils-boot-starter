@@ -15,7 +15,7 @@ excel-utils:
 swagger-config:
   enable: true
   protocol: http
-  base-package: cn.jy.excelUtils.example
+  base-package: cn.creekmoon.excelUtils.example
   title: 导入导出测试API
   version: 1.0
   description: 导入导出测试API

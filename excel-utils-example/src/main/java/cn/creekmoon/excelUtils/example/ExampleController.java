@@ -1,7 +1,5 @@
 package cn.creekmoon.excelUtils.example;
 
-import cn.hutool.core.date.DatePattern;
-import cn.hutool.core.util.RandomUtil;
 import cn.creekmoon.excelUtils.converter.DateConverter;
 import cn.creekmoon.excelUtils.converter.IntegerConverter;
 import cn.creekmoon.excelUtils.converter.LocalDateTimeConverter;
@@ -9,7 +7,12 @@ import cn.creekmoon.excelUtils.core.AsyncTaskState;
 import cn.creekmoon.excelUtils.core.ExcelExport;
 import cn.creekmoon.excelUtils.core.ExcelImport;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
+import cn.hutool.core.date.DatePattern;
+import cn.hutool.core.util.RandomUtil;
+import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +29,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Api(tags = "测试API")
 @RestController("/test")
 public class ExampleController {
 
@@ -107,6 +111,23 @@ public class ExampleController {
         return taskState;
     }
 
+    @GetMapping(value = "/exportExcel5")
+    @ApiOperation("构建多个Sheet页,导出数据")
+    public void exportExcel5(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        ArrayList<Student> result = createStudentList(60_000);
+        ExcelExport.create("lalala", Student.class)
+                .switchSheet("第一个标签页")
+                .addTitle("基本信息::用户名", Student::getUserName)
+                .addTitle("基本信息::全名", Student::getFullName)
+                .write(result)
+                .switchSheet("第二个标签页")
+                .addTitle("额外附加信息::年龄", Student::getAge)
+                .addTitle("额外附加信息::邮箱", Student::getEmail)
+                .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
+                .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
+                .write(result)
+                .response(response);
+    }
 
     /**
      * 导入
@@ -261,5 +282,21 @@ public class ExampleController {
             result.add(createNewStudent());
         }
         return result;
+    }
+
+    /**
+     * 注意导出的对象不能重写 equal和hashCode方法
+     */
+    @Setter
+    @Getter
+    public static class Student {
+
+
+        String userName;
+        String fullName;
+        String email;
+        Integer age;
+        Date birthday;
+        LocalDateTime expTime;
     }
 }
