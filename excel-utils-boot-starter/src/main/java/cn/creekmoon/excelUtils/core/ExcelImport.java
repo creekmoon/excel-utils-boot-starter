@@ -176,7 +176,7 @@ public class ExcelImport<R> {
         return this;
     }
 
-    public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) throws IOException {
+    public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
         skipEmptyTitles.add(title);
         addConvertAndMustExist(title, convert, setter);
         return this;
