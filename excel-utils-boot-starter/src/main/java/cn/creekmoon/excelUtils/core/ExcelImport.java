@@ -172,26 +172,26 @@ public class ExcelImport<R> {
 
     public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, BiConsumer<R, String> setter) {
         skipEmptyTitles.add(title);
-        addConvertAndMustExist(title, x -> x, setter);
+        addConvert(title, x -> x, setter);
         return this;
     }
 
     public <T> ExcelImport<R> addConvertAndSkipEmpty(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
         skipEmptyTitles.add(title);
-        addConvertAndMustExist(title, convert, setter);
+        addConvert(title, convert, setter);
         return this;
     }
 
 
     public ExcelImport<R> addConvertAndMustExist(String title, BiConsumer<R, String> setter) {
         mustExistTitles.add(title);
-        addConvertAndMustExist(title, x -> x, setter);
+        addConvert(title, x -> x, setter);
         return this;
     }
 
     public <T> ExcelImport<R> addConvertAndMustExist(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
         mustExistTitles.add(title);
-        this.addConvert(title, convert, setter);
+        addConvert(title, convert, setter);
         return this;
     }
 
@@ -337,8 +337,8 @@ public class ExcelImport<R> {
                 Object convertValue = converts.get(entry.getKey()).apply(value);
                 consumers.get(entry.getKey()).accept(currentObject, convertValue);
             } catch (Exception e) {
-                log.error("EXCEL导入数据转换失败！", e);
-                throw new CheckedExcelException(StrFormatter.format(ExcelConstants.CONVERT_FAIL_MSG, entry.getKey()));
+                log.warn("EXCEL导入数据转换失败！", e);
+                throw new CheckedExcelException(StrFormatter.format(ExcelConstants.CONVERT_FAIL_MSG + GlobalExceptionManager.getExceptionMsg(e), entry.getKey()));
             }
         }
     }
