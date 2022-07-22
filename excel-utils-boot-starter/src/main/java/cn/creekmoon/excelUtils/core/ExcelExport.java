@@ -316,7 +316,7 @@ public class ExcelExport<R> {
      * 自动设置列宽 : 简单粗暴将前100列都设置宽度
      */
     private void autoSetColumnWidth() {
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 500; i++) {
             try {
                 getBigExcelWriter().setColumnWidth(i, 20);
             } catch (Exception ignored) {
@@ -387,7 +387,12 @@ public class ExcelExport<R> {
     }
 
 
-    private BigExcelWriter getBigExcelWriter() {
+    /**
+     * 提供一个内部操作类, 希望最好不要用这个方法
+     *
+     * @return
+     */
+    public BigExcelWriter getBigExcelWriter() {
         if (bigExcelWriter == null) {
             bigExcelWriter = ExcelUtil.getBigWriter(PathFinder.getAbsoluteFilePath(taskId), currentSheetName);
         }
