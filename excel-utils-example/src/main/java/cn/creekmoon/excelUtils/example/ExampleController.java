@@ -114,11 +114,11 @@ public class ExampleController {
     public void exportExcel5(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(60_000);
         ExcelExport.create("lalala", Student.class)
-                .switchSheet("第一个标签页")
+                .switchSheet("第一个标签页", Student.class)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName)
                 .write(result)
-                .switchSheet("第二个标签页")
+                .switchSheet("第二个标签页", Student.class)
                 .addTitle("额外附加信息::年龄", Student::getAge)
                 .addTitle("额外附加信息::邮箱", Student::getEmail)
                 .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)

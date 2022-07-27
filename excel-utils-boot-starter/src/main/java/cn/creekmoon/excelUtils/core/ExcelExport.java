@@ -43,8 +43,6 @@ public class ExcelExport<R> {
     /* 多级表头时会用到  深度和标题的映射关系*/
     HashMap<Integer, List<Title>> depth2Titles = new HashMap<>();
 
-
-    /*当前Excel标签的名称 初始化后会自动赋值 不要在这里赋初值*/
     private String currentSheetName;
 
     /**
@@ -87,8 +85,9 @@ public class ExcelExport<R> {
         return this;
     }
 
-    public void debug() {
+    public ExcelExport<R> debug() {
         this.debugger = true;
+        return this;
     }
 
 
@@ -251,18 +250,18 @@ public class ExcelExport<R> {
                         int endColIndex = list.stream().map(x -> x.endColIndex).max(Comparator.naturalOrder()).orElse(1);
                         if (startColIndex == endColIndex) {
                             if (debugger) {
-                                System.out.println("[Excel构建] 插入表头" + list.get(0).titleName);
+                                System.out.println("[Excel构建] 插入表头[" + list.get(0).titleName + "]");
                             }
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellValue(list.get(0).titleName);
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellStyle(this.getBigExcelWriter().getHeadCellStyle());
                             return;
                         }
                         if (debugger) {
-                            System.out.println("[Excel构建] 插入表头并横向合并" + list.get(0).titleName + "  预计合并格数" + (endColIndex - startColIndex));
+                            System.out.println("[Excel构建] 插入表头并横向合并[" + list.get(0).titleName + "]预计合并格数[" + (endColIndex - startColIndex) + "]");
                         }
                         this.getBigExcelWriter().merge(rowsIndex, rowsIndex, startColIndex, endColIndex, list.get(0).titleName, true);
                         if (debugger) {
-                            System.out.println("[Excel构建] 横向合并表头" + list.get(0).titleName + "完毕");
+                            System.out.println("[Excel构建] 横向合并表头[" + list.get(0).titleName + "]完毕");
                         }
                     });
             /* hutool excel 写入下移一行*/
@@ -289,6 +288,7 @@ public class ExcelExport<R> {
             }
         }
 
+        this.autoSetColumnWidth();
     }
 
     /**
@@ -306,7 +306,6 @@ public class ExcelExport<R> {
      * @return taskId
      */
     public String stopWrite() {
-        this.autoSetColumnWidth();
         getBigExcelWriter().close();
         return taskId;
     }
@@ -388,7 +387,7 @@ public class ExcelExport<R> {
 
 
     /**
-     * 提供一个内部操作类, 希望最好不要用这个方法
+     * 内部操作类,但是暴露出来了,希望最好不要用这个方法
      *
      * @return
      */
@@ -504,16 +503,15 @@ public class ExcelExport<R> {
     /**
      * 切换到新的标签页,注意不能再切换回来
      */
-    public ExcelExport<R> switchSheet(String sheetName) {
-        /*如果已经生成过标题, 那么重置标题*/
-        if (MAX_TITLE_DEPTH != null) {
-            restTitles();
-        }
-        /*切换到对应的标签页*/
-        this.currentSheetName = sheetName;
-        this.autoSetColumnWidth();
-        getBigExcelWriter().setSheet(sheetName);
-        return this;
+    public <T> ExcelExport<T> switchSheet(String sheetName, Class<T> newDataClass) {
+        /*初始化一个新的对象  继承了当前的写入器和一些基本信息 只是切换了sheet页*/
+        ExcelExport<T> excelExport = ExcelExport.create(this.excelName, newDataClass);
+        excelExport.currentSheetName = sheetName;
+        excelExport.taskId = taskId;
+        excelExport.debugger = debugger;
+        excelExport.bigExcelWriter = bigExcelWriter;
+        excelExport.getBigExcelWriter().setSheet(sheetName);
+        return excelExport;
     }
 
 
