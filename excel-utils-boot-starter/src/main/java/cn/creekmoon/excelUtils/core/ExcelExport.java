@@ -1,7 +1,6 @@
 package cn.creekmoon.excelUtils.core;
 
-import cn.creekmoon.excelUtils.threadPool.AsyncExportExecutor;
-import cn.creekmoon.excelUtils.threadPool.AsyncStateCallbackExecutor;
+
 import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
@@ -10,7 +9,6 @@ import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.BigExcelWriter;
 import cn.hutool.poi.excel.ExcelUtil;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.servlet.ServletOutputStream;
@@ -18,9 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -88,39 +84,6 @@ public class ExcelExport<R> {
     public ExcelExport<R> debug() {
         this.debugger = true;
         return this;
-    }
-
-
-    /**
-     * 异步写入
-     *
-     * @param dataSupplier  数据提供者 当数据Size==0时 自动停止写入
-     * @param asyncCallback 异步回调方法,每隔1.5秒回调一次  通常这里可以将AsyncTaskState进行保存
-     * @return
-     */
-    @SneakyThrows
-    public AsyncTaskState writeAsync(Supplier<List<R>> dataSupplier, Consumer<AsyncTaskState> asyncCallback) {
-        //生成一个定时回调任务
-        AsyncTaskState asyncTaskState = AsyncStateCallbackExecutor.createAsyncTaskState(taskId, asyncCallback);
-        /*执行异步写方法*/
-        AsyncExportExecutor.run(() -> {
-            try {
-                for (; ; ) {
-                    List<R> dataList = dataSupplier.get();
-                    if (dataList == null || dataList.size() == 0) {
-                        break;
-                    }
-                    asyncTaskState.setTryRowCount(asyncTaskState.getTryRowCount() + dataList.size());
-                    write(dataList, WriteStrategy.CONTINUE_ON_ERROR);
-                    asyncTaskState.setSuccessRowCount(asyncTaskState.getSuccessRowCount() + dataList.size());
-                }
-            } finally {
-                stopWrite();
-                /*异步写完成后 将回调任务关闭*/
-                AsyncStateCallbackExecutor.completedAsyncTaskState(taskId);
-            }
-        });
-        return asyncTaskState;
     }
 
 
@@ -290,7 +253,7 @@ public class ExcelExport<R> {
             }
         }
 
-        this.autoSetColumnWidth();
+        this.setColumnWidthDefault();
     }
 
     /**
@@ -314,12 +277,29 @@ public class ExcelExport<R> {
 
 
     /**
-     * 自动设置列宽 : 简单粗暴将前100列都设置宽度
+     * 默认设置列宽 : 简单粗暴将前500列都设置宽度20
      */
-    private void autoSetColumnWidth() {
-        for (int i = 0; i < 500; i++) {
+    public void setColumnWidthDefault() {
+        this.setColumnWidth(500, 20);
+    }
+
+    /**
+     * 自动设置列宽
+     */
+    public void setColumnWidthAuto() {
+        try {
+            getBigExcelWriter().autoSizeColumnAll();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * 默认设置列宽 : 简单粗暴将前500列都设置宽度
+     */
+    public void setColumnWidth(int cols, int width) {
+        for (int i = 0; i < cols; i++) {
             try {
-                getBigExcelWriter().setColumnWidth(i, 20);
+                getBigExcelWriter().setColumnWidth(i, width);
             } catch (Exception ignored) {
             }
         }

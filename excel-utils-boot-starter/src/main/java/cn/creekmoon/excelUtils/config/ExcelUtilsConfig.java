@@ -1,8 +1,20 @@
 package cn.creekmoon.excelUtils.config;
 
+import cn.creekmoon.excelUtils.core.ExcelImport;
+import cn.creekmoon.excelUtils.exception.ExcelUtilsExceptionHandler;
+import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
+import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import lombok.Data;
+import org.springframework.beans.BeansException;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
+
+import javax.annotation.PostConstruct;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.concurrent.Semaphore;
 
 /**
  * ES连接常量
@@ -10,21 +22,46 @@ import org.springframework.stereotype.Component;
 @Component //定义配置类
 @Data //提供get set方法
 @ConfigurationProperties(prefix = "excel-utils") //yml配置中的路径
-public class ExcelUtilsConfig {
+public class ExcelUtilsConfig implements ApplicationContextAware {
+
+    public static int DEFAULT_IMPORT_MAX_PARALLEL = 4;
+    public static int DEFAULT_TEMP_FILE_LIFE_MINUTES = 4;
+
     /**
      * 能并行执行多少个导入任务 防止内存溢出
      */
-    private int importMaxParallel = 4;
-    /**
-     * 异步读写时,回调状态的刷新时间 单位毫秒
-     */
-    private int asyncRefreshMilliseconds = 1500;
-    /**
-     * 使用异步导入时,如果导入累计出现异常超过最大次数,则中断导入
-     */
-    private int asyncImportMaxFail = 100;
+    private int importMaxParallel = 0;
+
     /**
      * 临时文件的保留寿命 单位分钟
      */
-    private int tempFileLifeMinutes = 5;
+    private int tempFileLifeMinutes = 0;
+
+    ApplicationContext applicationContext;
+
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.applicationContext = applicationContext;
+    }
+
+    @PostConstruct
+    public void init() {
+        /*配置默认值*/
+        if (importMaxParallel <= 0) {
+            importMaxParallel = DEFAULT_IMPORT_MAX_PARALLEL;
+        }
+        if (tempFileLifeMinutes <= 0) {
+            tempFileLifeMinutes = DEFAULT_TEMP_FILE_LIFE_MINUTES;
+        }
+        /*装配异常处理器*/
+        Collection<ExcelUtilsExceptionHandler> values = applicationContext.getBeansOfType(ExcelUtilsExceptionHandler.class).values();
+        GlobalExceptionManager.excelUtilsExceptionHandlers.addAll(values);
+        GlobalExceptionManager.excelUtilsExceptionHandlers.sort(Comparator.comparing(ExcelUtilsExceptionHandler::getOrder));
+        CleanTempFilesExecutor.TEMP_FILE_LIFE_MINUTES = importMaxParallel;
+        CleanTempFilesExecutor.init(1);
+
+        /*初始化最大的导入导出执行数量*/
+        ExcelImport.importSemaphore = new Semaphore(tempFileLifeMinutes);
+    }
 }

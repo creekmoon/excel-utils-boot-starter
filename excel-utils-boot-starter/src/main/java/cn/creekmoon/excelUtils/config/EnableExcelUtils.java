@@ -13,7 +13,18 @@ import java.lang.annotation.Target;
  */
 @Target({ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
-@Import({ExcelUtilsConfig.class, ExcelUtilsAutoConfiguration.class})
+@Import({ExcelUtilsAutoConfiguration.class})
 public @interface EnableExcelUtils {
 
+    Class[] customExceptions() default {};
+
+    /**
+     * 能并行执行多少个导入任务 防止内存溢出
+     */
+    int importMaxParallel() default 2;
+
+    /**
+     * 临时文件的保留寿命 单位分钟
+     */
+    int tempFileLifeMinutes() default 5;
 }

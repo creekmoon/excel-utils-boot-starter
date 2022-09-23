@@ -8,7 +8,7 @@
     <name>excel-utils-parent</name>
     <artifactId>excel-utils-parent</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.7</version>
+    <version>1.1.0</version>
     <modules>
         <module>excel-utils-boot-starter</module>
         <!--<module>excel-utils-example</module>-->
