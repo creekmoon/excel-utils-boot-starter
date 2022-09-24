@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -33,8 +34,8 @@ public class ExampleController {
 
     @GetMapping(value = "/exportExcel")
     @ApiOperation("单次查询,并导出数据")
-    public void exportExcel(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ArrayList<Student> result = createStudentList(60_000);
+    public void exportExcel(Integer size, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        ArrayList<Student> result = createStudentList(size != null ? size : 60_000);
         ExcelExport.create("lalala", Student.class)
                 .addTitle("用户名", Student::getUserName)
                 .addTitle("全名", Student::getFullName)
@@ -108,9 +109,9 @@ public class ExampleController {
      * @param response
      * @throws IOException
      */
-    @PostMapping(value = "/importExcel1")
-    @ApiOperation("同步导入数据")
-    public void importExcel(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    @PostMapping(value = "/importExcelBySax")
+    @ApiOperation("同步导入数据(SAX模式)")
+    public void importExcelBySax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
         ExcelImport.create(file, Student::new)
@@ -133,6 +134,41 @@ public class ExampleController {
         System.out.println("执行时间:" + (end - start));
     }
 
+    /**
+     * 导入
+     *
+     * @param request
+     * @param response
+     * @throws IOException
+     */
+    @PostMapping(value = "/importExcelByMemory")
+    @ApiOperation("同步导入数据(内存模式)")
+    public void importExcelByMemory(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        //判断这个方法的执行时间
+        long start = System.currentTimeMillis();
+        ExcelImport<Student> studentExcelImport = ExcelImport.create(file, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
+        List<Student> students = studentExcelImport.readAll(ExcelImport.ConvertStrategy.SKIP_ALL_IF_FAIL);
+        students.forEach(student -> {
+            if (student.age == 76) {
+                studentExcelImport.setResult(student, "767676");
+                return;
+            }
+            System.out.println(student);
+            studentExcelImport.setResult(student, ExcelImport.RESULT_TITLE);
+        });
+
+        studentExcelImport.response(response);
+
+        //判断这个方法的执行时间
+        long end = System.currentTimeMillis();
+        System.out.println("执行时间:" + (end - start));
+    }
 
     private Student createNewStudent() {
         Student student = new Student();

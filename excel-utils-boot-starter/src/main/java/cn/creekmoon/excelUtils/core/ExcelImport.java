@@ -70,7 +70,7 @@ public class ExcelImport<R> {
 
 
     public static <T> ExcelImport<T> create(MultipartFile file, Supplier<T> supplier) {
-        return create(file, supplier, ConvertStrategy.STOP_IF_CONVERT_ERROR);
+        return create(file, supplier, ConvertStrategy.SKIP_ALL_IF_FAIL);
     }
 
 
@@ -139,8 +139,10 @@ public class ExcelImport<R> {
         return this;
     }
 
+
+    @SneakyThrows
     public ExcelImport<R> read(ExConsumer<R> dataConsumer) {
-        //旧版的读取策略 使用内存读取模式
+        //旧版的读取 使用内存读取模式
 //        List<R> read = readAll();
 //        for (int i = 0; i < read.size(); i++) {
 //            try {
@@ -151,15 +153,29 @@ public class ExcelImport<R> {
 //            }
 //        }
 
+
+        //新版读取 使用SAX读取模式
         Excel07SaxReader excel07SaxReader = initSaxReader(dataConsumer);
-        excel07SaxReader.read(file);
+        /*尝试拿锁*/
+        importSemaphore.acquire();
+        try {
+            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
+            excel07SaxReader.read(file.getInputStream(), -1);
+        } catch (Exception e) {
+            log.error("SaxReader读取Excel文件异常", e);
+            e.printStackTrace();
+            ExcelExport.cleanTempFile(excelExport.stopWrite());
+        } finally {
+            /*释放信号量*/
+            importSemaphore.release();
+        }
 
 
         return this;
     }
 
     /**
-     * 读取所有Excel到一个List
+     * 读取Excel内容到一个List (内存模式)
      *
      * @return
      */
@@ -185,12 +201,12 @@ public class ExcelImport<R> {
                     object2Row.remove(currentObject);
                 }
             }
-            /*如果读取策略为RETURN_EMPTY_ON_FAIL*/
-            if (convertStrategy == ConvertStrategy.STOP_IF_CONVERT_ERROR) {
+            /*如果读取策略为SKIP_ALL_IF_FAIL*/
+            if (convertStrategy == ConvertStrategy.SKIP_ALL_IF_FAIL) {
                 return existsFail ? Collections.EMPTY_LIST : new ArrayList<R>(object2Row.keySet());
             }
-            /*如果读取策略为CONTINUE_ON_FAIL*/
-            if (convertStrategy == ConvertStrategy.SKIP_FAIL_IF_CONVERT_ERROR) {
+            /*如果读取策略为SKIP_ROW_IF_FAIL*/
+            if (convertStrategy == ConvertStrategy.SKIP_ROW_IF_FAIL) {
                 return new ArrayList<R>(object2Row.keySet());
             }
             throw new RuntimeException("读取文档时发生错误,未定义读取策略ReadStrategy");
@@ -209,8 +225,9 @@ public class ExcelImport<R> {
 
 
     public void response(HttpServletResponse response) throws IOException {
-        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
-        excelExport.writeByMap(rows);
+        if (rows != null && !rows.isEmpty()) {
+            excelExport.writeByMap(rows);
+        }
         excelExport.setColumnWidthDefault();
         excelExport.response(response);
     }
@@ -334,9 +351,10 @@ public class ExcelImport<R> {
      */
     public enum ConvertStrategy {
         /*如果convert阶段失败, 跳过所有的行*/
-        STOP_IF_CONVERT_ERROR,
+        SKIP_ALL_IF_FAIL,
         /*如果convert阶段失败, 跳过失败的行*/
-        SKIP_FAIL_IF_CONVERT_ERROR;
+        SKIP_ROW_IF_FAIL;
+
     }
 
 }
