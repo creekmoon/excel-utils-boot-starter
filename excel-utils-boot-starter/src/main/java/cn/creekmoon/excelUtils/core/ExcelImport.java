@@ -7,6 +7,8 @@ import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelReader;
 import cn.hutool.poi.excel.ExcelUtil;
+import cn.hutool.poi.excel.sax.Excel07SaxReader;
+import cn.hutool.poi.excel.sax.handler.RowHandler;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
@@ -38,9 +40,9 @@ public class ExcelImport<R> {
      */
     public static final String RESULT_TITLE = "导入结果";
     /**
-     * 转换器策略
+     * 起始行号 从0开始  这里是1,意味着第一行是标题,第二行才是数据
      */
-    public ConvertStrategy convertStrategy;
+    public int startRowIndex = 1;
 
     /* key=title  value=执行器 */
     private Map<String, ExFunction> converts = new LinkedHashMap(32);
@@ -58,7 +60,10 @@ public class ExcelImport<R> {
     /*当前导入的文件*/
     private MultipartFile file;
     public R currentObject;
-
+    /**
+     * 导入结果
+     */
+    private ExcelExport excelExport;
 
     private ExcelImport() {
     }
@@ -76,7 +81,10 @@ public class ExcelImport<R> {
         ExcelImport<T> excelImport = new ExcelImport();
         excelImport.newObjectSupplier = supplier;
         excelImport.file = file;
-        excelImport.convertStrategy = convertStrategy;
+
+        /*初始化一个导入结果*/
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
+        excelImport.excelExport = ExcelExport.create("result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");
         return excelImport;
     }
 
@@ -132,15 +140,21 @@ public class ExcelImport<R> {
     }
 
     public ExcelImport<R> read(ExConsumer<R> dataConsumer) {
-        List<R> read = readAll();
-        for (int i = 0; i < read.size(); i++) {
-            try {
-                dataConsumer.accept(read.get(i));
-                setResult(read.get(i), IMPORT_SUCCESS_MSG);
-            } catch (Exception e) {
-                setResult(read.get(i), GlobalExceptionManager.getExceptionMsg(e));
-            }
-        }
+        //旧版的读取策略 使用内存读取模式
+//        List<R> read = readAll();
+//        for (int i = 0; i < read.size(); i++) {
+//            try {
+//                dataConsumer.accept(read.get(i));
+//                setResult(read.get(i), IMPORT_SUCCESS_MSG);
+//            } catch (Exception e) {
+//                setResult(read.get(i), GlobalExceptionManager.getExceptionMsg(e));
+//            }
+//        }
+
+        Excel07SaxReader excel07SaxReader = initSaxReader(dataConsumer);
+        excel07SaxReader.read(file);
+
+
         return this;
     }
 
@@ -150,7 +164,7 @@ public class ExcelImport<R> {
      * @return
      */
     @SneakyThrows
-    public List<R> readAll() {
+    public List<R> readAll(ConvertStrategy convertStrategy) {
         importSemaphore.acquire();
         try {
             /*初始化读取器*/
@@ -196,10 +210,9 @@ public class ExcelImport<R> {
 
     public void response(HttpServletResponse response) throws IOException {
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
-        ExcelExport export = ExcelExport.create("result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");
-        export.writeByMap(rows);
-        export.setColumnWidthDefault();
-        export.response(response);
+        excelExport.writeByMap(rows);
+        excelExport.setColumnWidthDefault();
+        excelExport.response(response);
     }
 
     /**
@@ -252,6 +265,67 @@ public class ExcelImport<R> {
                 throw new CheckedExcelException(StrFormatter.format(ExcelConstants.CONVERT_FAIL_MSG + GlobalExceptionManager.getExceptionMsg(e), entry.getKey()));
             }
         }
+    }
+
+    /**
+     * 初始化SAX读取器
+     * 将所有的数据按行读取
+     *
+     * @throws IOException
+     */
+    Excel07SaxReader initSaxReader(ExConsumer<R> dataConsumer) {
+
+        HashMap<Integer, String> colIndex2Title = new HashMap<>();
+
+        /*返回一个Sax读取器*/
+        return new Excel07SaxReader(new RowHandler() {
+
+            @Override
+            public void doAfterAllAnalysed() {
+                /*sheet读取结束时*/
+                //excelExport.stopWrite();
+                //ExcelExport.cleanTempFile(excelExport.taskId);
+            }
+
+            @Override
+            public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
+                /*读取标题*/
+                if (sheetIndex == 0 && rowIndex == startRowIndex - 1) {
+                    for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
+                        String title = MataConverter.parse(rowList.get(colIndex));
+                        if (converts.containsKey(title)) {
+                            colIndex2Title.put(colIndex, title);
+                        }
+                    }
+                    return;
+                }
+                /*只读取第一个sheet 并从第二行开始  因为第一行约定是标题*/
+                if (sheetIndex != 0 || rowIndex < startRowIndex) {
+                    return;
+                }
+                /*Excel解析原生的数据*/
+                HashMap<String, Object> rowData = new LinkedHashMap<>();
+                for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
+                    rowData.put(colIndex2Title.get(colIndex), MataConverter.parse(rowList.get(colIndex)));
+                }
+                /*转换成业务对象*/
+                try {
+                    /*转换*/
+                    rowConvert(rowData);
+                    rowData.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
+                    /*消费*/
+                    dataConsumer.accept(currentObject);
+                    rowData.put(RESULT_TITLE, IMPORT_SUCCESS_MSG);
+                } catch (Exception e) {
+                    /*遇到异常 获取异常信息*/
+                    String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
+                    /*写入导出Excel结果*/
+                    rowData.put(RESULT_TITLE, exceptionMsg);
+                } finally {
+                    excelExport.writeByMap(Collections.singletonList(rowData));
+                }
+            }
+        });
     }
 
 
