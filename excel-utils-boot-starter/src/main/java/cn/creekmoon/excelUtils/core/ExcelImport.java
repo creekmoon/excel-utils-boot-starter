@@ -65,7 +65,7 @@ public class ExcelImport<R> {
 
 
     public static <T> ExcelImport<T> create(MultipartFile file, Supplier<T> supplier) {
-        return create(file, supplier, ConvertStrategy.SKIP_ALL_IF_CONVERT_ERROR);
+        return create(file, supplier, ConvertStrategy.STOP_IF_CONVERT_ERROR);
     }
 
 
@@ -172,7 +172,7 @@ public class ExcelImport<R> {
                 }
             }
             /*如果读取策略为RETURN_EMPTY_ON_FAIL*/
-            if (convertStrategy == ConvertStrategy.SKIP_ALL_IF_CONVERT_ERROR) {
+            if (convertStrategy == ConvertStrategy.STOP_IF_CONVERT_ERROR) {
                 return existsFail ? Collections.EMPTY_LIST : new ArrayList<R>(object2Row.keySet());
             }
             /*如果读取策略为CONTINUE_ON_FAIL*/
@@ -260,7 +260,7 @@ public class ExcelImport<R> {
      */
     public enum ConvertStrategy {
         /*如果convert阶段失败, 跳过所有的行*/
-        SKIP_ALL_IF_CONVERT_ERROR,
+        STOP_IF_CONVERT_ERROR,
         /*如果convert阶段失败, 跳过失败的行*/
         SKIP_FAIL_IF_CONVERT_ERROR;
     }
