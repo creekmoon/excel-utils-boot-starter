@@ -19,12 +19,12 @@ public @interface EnableExcelUtils {
     Class[] customExceptions() default {};
 
     /**
-     * 能并行执行多少个导入任务 防止内存溢出
+     * 能并行执行多少个导入任务 防止内存溢出 初始化后会赋值给ExcelUtilsConfig
      */
-    int importMaxParallel() default 2;
+    int importMaxParallel() default 4;
 
     /**
-     * 临时文件的保留寿命 单位分钟
+     * 临时文件的保留寿命 单位分钟  初始化后会赋值给ExcelUtilsConfig
      */
     int tempFileLifeMinutes() default 5;
 }

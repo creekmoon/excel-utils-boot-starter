@@ -1,7 +1,7 @@
 package cn.creekmoon.excelUtils.threadPool;
 
-import cn.hutool.core.io.FileUtil;
 import cn.creekmoon.excelUtils.core.PathFinder;
+import cn.hutool.core.io.FileUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
@@ -11,10 +11,14 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+
+/**
+ * 线程池 专门用于清理临时文件
+ */
 @Slf4j
 public class CleanTempFilesExecutor {
 
-    private static ThreadFactory threadFactory = new CustomizableThreadFactory("excel-clean-thread");
+    private static final ThreadFactory threadFactory = new CustomizableThreadFactory("excel-clean-thread");
     ;
     /*一个延迟任务线程池*/
     private static ScheduledThreadPoolExecutor threadPoolExecutor = new ScheduledThreadPoolExecutor(1, threadFactory, new ThreadPoolExecutor.AbortPolicy());
@@ -24,12 +28,12 @@ public class CleanTempFilesExecutor {
      */
     public static int TEMP_FILE_LIFE_MINUTES;
 
-    public static void init(int corePoolSize) {
+    public static void init() {
+        int corePoolSize = 1;
         if (threadPoolExecutor != null) {
             threadPoolExecutor.shutdown();
         }
         threadPoolExecutor = new ScheduledThreadPoolExecutor(corePoolSize, threadFactory);
-
     }
 
     /**

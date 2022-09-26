@@ -40,9 +40,9 @@ public class ExcelImport<R> {
      */
     public static final String RESULT_TITLE = "导入结果";
     /**
-     * 起始行号 从0开始  这里是1,意味着第一行是标题,第二行才是数据
+     * 标题行号 这里是0,意味着第一行是标题, 第二行才是数据
      */
-    public int startRowIndex = 1;
+    public int titleRowIndex = 0;
 
     /* key=title  value=执行器 */
     private Map<String, ExFunction> converts = new LinkedHashMap(32);
@@ -51,11 +51,6 @@ public class ExcelImport<R> {
     /* key=title */
     private Set<String> mustExistTitles = new HashSet<>(32);
     private Set<String> skipEmptyTitles = new HashSet<>(32);
-    /* 所有原生的Excel行 */
-    private List<Map<String, Object>> rows;
-    /* key=对象  value=未转换的对象  如果转换失败不会在里面*/
-    private Map<R, Map<String, Object>> object2Row = new LinkedHashMap<>(512);
-
     private Supplier<R> newObjectSupplier;
     /*当前导入的文件*/
     private MultipartFile file;
@@ -65,9 +60,16 @@ public class ExcelImport<R> {
      */
     private ExcelExport excelExport;
 
+
+    //============================内存读取模式对象==========================
+    /* 所有原生的Excel行 */
+    private List<Map<String, Object>> rows;
+    /* key=对象  value=未转换的对象  如果转换失败不会在里面*/
+    private Map<R, Map<String, Object>> object2Row = new LinkedHashMap<>(512);
+    //============================内存读取模式对象==========================
+
     private ExcelImport() {
     }
-
 
     public static <T> ExcelImport<T> create(MultipartFile file, Supplier<T> supplier) {
         return create(file, supplier, ConvertStrategy.SKIP_ALL_IF_FAIL);
@@ -187,10 +189,11 @@ public class ExcelImport<R> {
             ExcelReader memoryReader = initMemoryReader();
             /*是否存在读取不通过的情况*/
             boolean existsFail = false;
-            rows = memoryReader.readAll();
+            rows = memoryReader.read(titleRowIndex, titleRowIndex + 1, Integer.MAX_VALUE);
             for (Map<String, Object> row : rows) {
                 try {
                     rowConvert(row);
+                    row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
                     /*转换成功*/
                     object2Row.put(currentObject, row);
                     row.put(RESULT_TITLE, CONVERT_SUCCESS_MSG);
@@ -307,7 +310,7 @@ public class ExcelImport<R> {
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
                 /*读取标题*/
-                if (sheetIndex == 0 && rowIndex == startRowIndex - 1) {
+                if (sheetIndex == 0 && rowIndex == titleRowIndex) {
                     for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
                         String title = MataConverter.parse(rowList.get(colIndex));
                         if (converts.containsKey(title)) {
@@ -316,8 +319,8 @@ public class ExcelImport<R> {
                     }
                     return;
                 }
-                /*只读取第一个sheet 并从第二行开始  因为第一行约定是标题*/
-                if (sheetIndex != 0 || rowIndex < startRowIndex) {
+                /*只读取第一个sheet的数据*/
+                if (sheetIndex != 0 || rowIndex <= titleRowIndex) {
                     return;
                 }
                 /*Excel解析原生的数据*/

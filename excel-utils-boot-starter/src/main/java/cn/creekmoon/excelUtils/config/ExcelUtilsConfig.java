@@ -54,14 +54,13 @@ public class ExcelUtilsConfig implements ApplicationContextAware {
         if (tempFileLifeMinutes <= 0) {
             tempFileLifeMinutes = DEFAULT_TEMP_FILE_LIFE_MINUTES;
         }
-        /*装配异常处理器*/
+        /*如果用户实现了ExcelUtilsExceptionHandler接口, 装配用户自己实现的异常处理器*/
         Collection<ExcelUtilsExceptionHandler> values = applicationContext.getBeansOfType(ExcelUtilsExceptionHandler.class).values();
         GlobalExceptionManager.excelUtilsExceptionHandlers.addAll(values);
         GlobalExceptionManager.excelUtilsExceptionHandlers.sort(Comparator.comparing(ExcelUtilsExceptionHandler::getOrder));
+        /*装配用户定义的参数*/
         CleanTempFilesExecutor.TEMP_FILE_LIFE_MINUTES = importMaxParallel;
-        CleanTempFilesExecutor.init(1);
-
-        /*初始化最大的导入导出执行数量*/
+        CleanTempFilesExecutor.init();
         ExcelImport.importSemaphore = new Semaphore(tempFileLifeMinutes);
     }
 }
