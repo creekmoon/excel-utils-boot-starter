@@ -1,7 +1,7 @@
 package cn.creekmoon.excelUtils.threadPool;
 
 import cn.creekmoon.excelUtils.core.PathFinder;
-import cn.hutool.core.io.FileUtil;
+import cn.creekmoon.excelUtils.hutool589.core.io.FileUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
