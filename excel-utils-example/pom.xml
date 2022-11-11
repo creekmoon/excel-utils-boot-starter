@@ -5,7 +5,7 @@
     <parent>
         <artifactId>excel-utils-parent</artifactId>
         <groupId>io.github.creekmoon</groupId>
-        <version>1.1.0</version>
+        <version>1.1.1</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -19,6 +19,10 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
         </dependency>
@@ -30,7 +34,6 @@
         <dependency>
             <groupId>io.github.creekmoon</groupId>
             <artifactId>excel-utils-boot-starter</artifactId>
-            <version>${current.version}</version>
         </dependency>
         <!-- swagger start -->
         <dependency>
@@ -45,7 +48,12 @@
             <groupId>com.github.xiaoymin</groupId>
             <artifactId>knife4j-spring-boot-starter</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.github.creekmoon</groupId>
+            <artifactId>excel-utils-boot-starter</artifactId>
+        </dependency>
     </dependencies>
+
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
