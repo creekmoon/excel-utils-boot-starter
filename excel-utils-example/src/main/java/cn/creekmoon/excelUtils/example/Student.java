@@ -1,7 +1,6 @@
 package cn.creekmoon.excelUtils.example;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -12,6 +11,9 @@ import java.util.Date;
  */
 @Setter
 @Getter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class Student {
 
 

@@ -42,11 +42,15 @@ public class CleanTempFilesExecutor {
      * @param taskId
      * @throws IOException
      */
-    public static void cleanTempFile(String taskId) {
+    public static void cleanTempFileDelay(String taskId) {
         threadPoolExecutor.schedule(() -> {
-            if (!FileUtil.del(PathFinder.getAbsoluteFilePath(taskId))) {
-                log.warn("清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(taskId));
-            }
+            cleanTeamFileNow(taskId);
         }, TEMP_FILE_LIFE_MINUTES, TimeUnit.MINUTES);
+    }
+
+    public static void cleanTeamFileNow(String taskId) {
+        if (!FileUtil.del(PathFinder.getAbsoluteFilePath(taskId))) {
+            log.warn("清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(taskId));
+        }
     }
 }

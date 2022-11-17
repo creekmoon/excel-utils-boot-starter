@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Api(tags = "测试API")
-@RestController("/test")
+@RestController
 @Slf4j
 public class ExampleController {
 

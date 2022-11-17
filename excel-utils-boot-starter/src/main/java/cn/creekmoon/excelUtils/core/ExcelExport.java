@@ -153,7 +153,7 @@ public class ExcelExport<R> {
     }
 
     public static void cleanTempFile(String taskId) {
-        CleanTempFilesExecutor.cleanTempFile(taskId);
+        CleanTempFilesExecutor.cleanTempFileDelay(taskId);
     }
 
     /**
