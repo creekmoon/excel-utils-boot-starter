@@ -48,7 +48,7 @@ class ExcelImportTest {
 
 
     @Test
-    public void unitTest() throws Exception {
+    public void exportResponseTest() throws Exception {
         AtomicInteger count = new AtomicInteger(0);
         int targetCount = 600;
         //构造请求
@@ -69,7 +69,6 @@ class ExcelImportTest {
                             .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
                             .read(data -> {
                                 count.incrementAndGet();
-                                System.out.println(data);
                             });
                 });
 
@@ -79,8 +78,8 @@ class ExcelImportTest {
 
 
     @Test
-    public void unitTest2() throws Exception {
-        //构建一个Excel
+    public void exportAndImport2() throws Exception {
+        //构建一个Excel 并获取文件对象
         List<Student> students = Arrays.asList(
                 Student.builder().fullName("first_full_name").age(1).build(),
                 Student.builder().fullName("second_full_name").age(2).build());
@@ -90,10 +89,12 @@ class ExcelImportTest {
                 .addTitle("生日", Student::getBirthday)
                 .write(students)
                 .stopWrite();
+        Assertions.assertNotNull(taskId);
         BufferedInputStream inputStream = FileUtil.getInputStream(PathFinder.getAbsoluteFilePath(taskId));
+        Assertions.assertNotNull(inputStream);
+
+        //读取excel
         MockMultipartFile testExcel = new MockMultipartFile("test", inputStream);
-
-
         List<Student> result = ExcelImport.create(testExcel, Student::new)
                 .addConvertAndMustExist("全名", Student::setFullName)
                 .addConvertAndSkipEmpty("年龄", IntegerConverter::parse, Student::setAge)
