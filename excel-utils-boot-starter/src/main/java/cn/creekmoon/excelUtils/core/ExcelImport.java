@@ -1,5 +1,6 @@
 package cn.creekmoon.excelUtils.core;
 
+import cn.creekmoon.excelUtils.config.ExcelUtilsConfig;
 import cn.creekmoon.excelUtils.converter.MataConverter;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
@@ -45,9 +46,9 @@ public class ExcelImport<R> {
     public int titleRowIndex = 0;
 
     /* key=title  value=执行器 */
-    private Map<String, ExFunction> converts = new LinkedHashMap(32);
+    private Map<String, ExFunction> title2converts = new LinkedHashMap(32);
     /* key=title value=消费者(通常是setter方法)*/
-    private Map<String, BiConsumer> consumers = new LinkedHashMap(32);
+    private Map<String, BiConsumer> title2consumers = new LinkedHashMap(32);
     /* key=title */
     private Set<String> mustExistTitles = new HashSet<>(32);
     private Set<String> skipEmptyTitles = new HashSet<>(32);
@@ -71,6 +72,13 @@ public class ExcelImport<R> {
     private ExcelImport() {
     }
 
+
+    public static void init() {
+        if (importSemaphore != null) {
+            importSemaphore = new Semaphore(ExcelUtilsConfig.IMPORT_MAX_PARALLEL);
+        }
+    }
+
     public static <T> ExcelImport<T> create(MultipartFile file, Supplier<T> supplier) {
         return create(file, supplier, ConvertStrategy.SKIP_ALL_IF_FAIL);
     }
@@ -86,7 +94,7 @@ public class ExcelImport<R> {
 
         /*初始化一个导入结果*/
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
-        excelImport.excelExport = ExcelExport.create("result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");
+        excelImport.excelExport = ExcelExport.create("import_result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");
         return excelImport;
     }
 
@@ -105,8 +113,8 @@ public class ExcelImport<R> {
 
 
     public <T> ExcelImport<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
-        converts.put(title, convert);
-        consumers.put(title, setter);
+        title2converts.put(title, convert);
+        title2consumers.put(title, setter);
         return this;
     }
 
@@ -259,11 +267,11 @@ public class ExcelImport<R> {
         /*初始化空对象*/
         currentObject = newObjectSupplier.get();
         /*最大转换次数*/
-        int maxConvertCount = consumers.keySet().size();
+        int maxConvertCount = title2consumers.keySet().size();
         /*执行convert*/
         for (Map.Entry<String, Object> entry : row.entrySet()) {
-            /*如果超过最大次数 不再进行读取*/
-            if (maxConvertCount-- <= 0) {
+            /*如果包含不支持的标题,  或者已经超过最大次数则不再进行读取*/
+            if (!title2consumers.containsKey(entry.getKey()) || maxConvertCount-- <= 0) {
                 break;
             }
             String value = Optional.ofNullable(entry.getValue()).map(x -> (String) x).orElse("");
@@ -278,8 +286,8 @@ public class ExcelImport<R> {
             }
             /*转换数据*/
             try {
-                Object convertValue = converts.get(entry.getKey()).apply(value);
-                consumers.get(entry.getKey()).accept(currentObject, convertValue);
+                Object convertValue = title2converts.get(entry.getKey()).apply(value);
+                title2consumers.get(entry.getKey()).accept(currentObject, convertValue);
             } catch (Exception e) {
                 log.warn("EXCEL导入数据转换失败！", e);
                 throw new CheckedExcelException(StrFormatter.format(ExcelConstants.CONVERT_FAIL_MSG + GlobalExceptionManager.getExceptionMsg(e), entry.getKey()));
@@ -296,15 +304,13 @@ public class ExcelImport<R> {
     Excel07SaxReader initSaxReader(ExConsumer<R> dataConsumer) {
 
         HashMap<Integer, String> colIndex2Title = new HashMap<>();
-
         /*返回一个Sax读取器*/
         return new Excel07SaxReader(new RowHandler() {
 
             @Override
             public void doAfterAllAnalysed() {
                 /*sheet读取结束时*/
-                //excelExport.stopWrite();
-                //ExcelExport.cleanTempFile(excelExport.taskId);
+
             }
 
             @Override
@@ -312,14 +318,11 @@ public class ExcelImport<R> {
                 /*读取标题*/
                 if (sheetIndex == 0 && rowIndex == titleRowIndex) {
                     for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
-                        String title = MataConverter.parse(rowList.get(colIndex));
-                        if (converts.containsKey(title)) {
-                            colIndex2Title.put(colIndex, title);
-                        }
+                        colIndex2Title.put(colIndex, MataConverter.parse(rowList.get(colIndex)));
                     }
                     return;
                 }
-                /*只读取第一个sheet的数据*/
+                /*只读取第一个sheet的数据 只读取标题行之后的数据 */
                 if (sheetIndex != 0 || rowIndex <= titleRowIndex) {
                     return;
                 }
@@ -337,10 +340,8 @@ public class ExcelImport<R> {
                     dataConsumer.accept(currentObject);
                     rowData.put(RESULT_TITLE, IMPORT_SUCCESS_MSG);
                 } catch (Exception e) {
-                    /*遇到异常 获取异常信息*/
-                    String exceptionMsg = GlobalExceptionManager.getExceptionMsg(e);
                     /*写入导出Excel结果*/
-                    rowData.put(RESULT_TITLE, exceptionMsg);
+                    rowData.put(RESULT_TITLE, GlobalExceptionManager.getExceptionMsg(e));
                 } finally {
                     excelExport.writeByMap(Collections.singletonList(rowData));
                 }

@@ -22,9 +22,9 @@ public class ExcelUtilsAutoConfiguration implements ImportSelector {
             GlobalExceptionManager.addExceptionHandler(new GlobalExceptionManager.DefaultExcelUtilsExceptionHandler(customExceptionName));
         }
         /*获取配置项 - 最大并行导入*/
-        ExcelUtilsConfig.DEFAULT_IMPORT_MAX_PARALLEL = (Integer) annotationAttributes.get("importMaxParallel");
+        ExcelUtilsConfig.IMPORT_MAX_PARALLEL = Math.max((Integer) annotationAttributes.get("importMaxParallel"), ExcelUtilsConfig.IMPORT_MAX_PARALLEL);
         /*获取配置项 - 临时文件寿命*/
-        ExcelUtilsConfig.DEFAULT_TEMP_FILE_LIFE_MINUTES = (Integer) annotationAttributes.get("tempFileLifeMinutes");
+        ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES = Math.max((Integer) annotationAttributes.get("tempFileLifeMinutes"), ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES);
 
         return new String[]{ExcelUtilsConfig.class.getName()};
     }

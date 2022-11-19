@@ -4,6 +4,7 @@ import cn.creekmoon.excelUtils.converter.DateConverter;
 import cn.creekmoon.excelUtils.converter.IntegerConverter;
 import cn.creekmoon.excelUtils.converter.LocalDateTimeConverter;
 import cn.creekmoon.excelUtils.core.AsyncTaskState;
+import cn.creekmoon.excelUtils.core.ExcelConstants;
 import cn.creekmoon.excelUtils.core.ExcelExport;
 import cn.creekmoon.excelUtils.core.ExcelImport;
 import cn.creekmoon.excelUtils.example.config.exception.MyNewException;
@@ -146,8 +147,7 @@ public class ExampleController {
     @PostMapping(value = "/importExcelByMemory")
     @ApiOperation("同步导入数据(内存模式)")
     public void importExcelByMemory(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        //判断这个方法的执行时间
-        long start = System.currentTimeMillis();
+
         ExcelImport<Student> studentExcelImport = ExcelImport.create(file, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
@@ -155,21 +155,20 @@ public class ExampleController {
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
+
+        //把excel都读取到内存中
         List<Student> students = studentExcelImport.readAll(ExcelImport.ConvertStrategy.SKIP_ALL_IF_FAIL);
         students.forEach(student -> {
-            if (student.age == 76) {
-                studentExcelImport.setResult(student, "767676");
+            if (student.age > 50) {
+                studentExcelImport.setResult(student, "学生年龄大于50, 不合法, 请检查参数");
                 return;
             }
-            System.out.println(student);
-            studentExcelImport.setResult(student, ExcelImport.RESULT_TITLE);
+            //todo 执行一些业务操作
+            studentExcelImport.setResult(student, ExcelConstants.IMPORT_SUCCESS_MSG);
         });
 
+        //响应导出结果
         studentExcelImport.response(response);
-
-        //判断这个方法的执行时间
-        long end = System.currentTimeMillis();
-        System.out.println("执行时间:" + (end - start));
     }
 
     private Student createNewStudent() {

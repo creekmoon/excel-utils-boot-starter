@@ -48,7 +48,7 @@ class ExcelImportTest {
 
 
     @Test
-    public void exportResponseTest() throws Exception {
+    public void exportTest() throws Exception {
         AtomicInteger count = new AtomicInteger(0);
         int targetCount = 600;
         //构造请求
@@ -78,7 +78,7 @@ class ExcelImportTest {
 
 
     @Test
-    public void exportAndImport2() throws Exception {
+    public void importTest() throws Exception {
         //构建一个Excel 并获取文件对象
         List<Student> students = Arrays.asList(
                 Student.builder().fullName("first_full_name").age(1).build(),
