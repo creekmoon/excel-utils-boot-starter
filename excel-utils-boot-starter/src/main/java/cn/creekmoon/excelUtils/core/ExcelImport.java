@@ -74,7 +74,7 @@ public class ExcelImport<R> {
 
 
     public static void init() {
-        if (importSemaphore != null) {
+        if (importSemaphore == null) {
             importSemaphore = new Semaphore(ExcelUtilsConfig.IMPORT_MAX_PARALLEL);
         }
     }
