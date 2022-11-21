@@ -27,7 +27,8 @@ public class GlobalExceptionManager {
         for (ExcelUtilsExceptionHandler excelUtilsExceptionHandler : excelUtilsExceptionHandlers) {
             String msg = excelUtilsExceptionHandler.customExceptionMessage(unCatchException);
             if (msg != null) {
-                return MSG_PREFIX + msg + MSG_SUFFIX;
+                //可能有嵌套调用的情况 所以每次进来先把两个前缀后缀替换了 否则会出现重复的词语
+                return MSG_PREFIX + msg.replace(MSG_PREFIX, "").replace(MSG_SUFFIX, "") + MSG_SUFFIX;
             }
         }
         log.error("ExcelUtils组件遇到无法处理的异常!", unCatchException);
