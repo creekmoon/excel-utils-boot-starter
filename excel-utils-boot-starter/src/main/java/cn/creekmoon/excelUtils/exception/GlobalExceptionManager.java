@@ -15,7 +15,7 @@ import java.util.List;
 @Slf4j
 public class GlobalExceptionManager {
 
-    public static final String MSG_PREFIX = "导入失败!";
+    public static final String MSG_PREFIX = "[失败!]";
     public static final String MSG_SUFFIX = "";
     public static List<ExcelUtilsExceptionHandler> excelUtilsExceptionHandlers = new ArrayList<>();
 
