@@ -110,8 +110,8 @@ public void exportExcel(HttpServletRequest request,HttpServletResponse response)
 - 使用 **ExcelImport.create()** 创建初始化本次导入, 第一个参数是前端传入的MultipartFile对象, 第二个参数本次解析的目标class.
 - 使用 **addConvert()** 增加转换器,每个转换器对应一个表头. 转换器有三个参数, 第一个参数是表头名称,
   第二个参数是解析器,在需要校验或者转换数据类型时可以选用, 第三个参数对应目标的Setter方法
-- 使用 **read() **读取数据
-- 使用 **response() **响应给前端结果
+- 使用 **read()**读取数据
+- 使用 **response()**响应给前端结果
 
 ```java
 @PostMapping(value = "/importExcel")
