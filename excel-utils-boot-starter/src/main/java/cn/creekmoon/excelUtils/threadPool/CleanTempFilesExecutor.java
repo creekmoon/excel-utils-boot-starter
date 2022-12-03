@@ -40,9 +40,19 @@ public class CleanTempFilesExecutor {
      * @throws IOException
      */
     public static void cleanTempFileDelay(String taskId) {
+        cleanTempFileDelay(taskId, null);
+    }
+
+    /**
+     * 清理临时文件
+     *
+     * @param taskId
+     * @param fileLifeMinutes 保留时间-单位分钟
+     */
+    public static void cleanTempFileDelay(String taskId, Integer fileLifeMinutes) {
         threadPoolExecutor.schedule(() -> {
             cleanTeamFileNow(taskId);
-        }, ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES, TimeUnit.MINUTES);
+        }, fileLifeMinutes != null ? fileLifeMinutes : ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES, TimeUnit.MINUTES);
     }
 
     public static void cleanTeamFileNow(String taskId) {
