@@ -8,6 +8,7 @@ import cn.creekmoon.excelUtils.core.ExcelConstants;
 import cn.creekmoon.excelUtils.core.ExcelExport;
 import cn.creekmoon.excelUtils.core.ExcelImport;
 import cn.creekmoon.excelUtils.example.config.exception.MyNewException;
+import cn.creekmoon.excelUtils.hutool589.core.text.StrFormatter;
 import cn.hutool.core.util.RandomUtil;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -39,7 +40,7 @@ public class ExampleController {
     @ApiOperation("单次查询,并导出数据")
     public void exportExcel(Integer size, HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(size != null ? size : 60_000);
-        ExcelExport.create("lalala", Student.class)
+        ExcelExport.create(StrFormatter.format("导出数据"), Student.class)
                 .addTitle("用户名", Student::getUserName)
                 .addTitle("全名", Student::getFullName)
                 .addTitle("年龄", Student::getAge)
