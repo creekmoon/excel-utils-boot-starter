@@ -18,7 +18,7 @@ public class DateConverter {
     public static final DateTimeFormatter fmt = DateTimeFormatter.ofPattern(DatePattern.NORM_DATETIME_PATTERN);
     private static final BigDecimal BIG_DECIMAL_24 = new BigDecimal(24);
     private static final BigDecimal BIG_DECIMAL_60 = new BigDecimal(60);
-    private static final BigDecimal BIG_DECIMAL_1000 = new BigDecimal(60);
+    private static final BigDecimal BIG_DECIMAL_1000 = new BigDecimal(1000);
     /* 重要 PS:EXCEL的起始时间是1899-12-30开始算的 而不是1900-1-1 不要问我为什么,我也不知道 */
     private static final LocalDateTime EXCEL_START_TIME = LocalDateTime.of(1899, 12, 30, 0, 0);
 

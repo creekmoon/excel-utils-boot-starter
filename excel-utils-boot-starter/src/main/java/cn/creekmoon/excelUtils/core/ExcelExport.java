@@ -15,6 +15,7 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URLEncoder;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -332,9 +333,18 @@ public class ExcelExport<R> {
      */
     /*回应请求*/
     private static void responseByFilePath(String filePath, String responseExcelName, HttpServletResponse response) throws IOException {
-        /*实际上是xlsx格式的文件  但以xls格式进行发送,好像也没什么问题*/
-        response.setContentType("application/vnd.ms-excel;charset=utf-8");
-        response.setHeader("Content-Disposition", "attachment;filename=" + responseExcelName + ".xlsx");
+        /*现代浏览器标准, RFC5987标准协议 显式指定文件名的编码格式为UTF-8 但是这样swagger-ui不支持回显 比较坑*/
+//        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+//        response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + URLEncoder.encode(responseExcelName + ".xlsx", "UTF-8"));
+
+        /*旧版协议 不能使用中文文件名 但是兼容所有浏览器*/
+//        response.setContentType("application/octet-stream");
+//        response.setHeader("Content-Disposition", "attachment;filename=" + responseExcelName + ".xlsx");
+
+        /*当前的兼容做法, 使用旧版协议, 但是用UTF-8编码文件名. 这样一来支持旧版浏览器下载文件(但文件名乱码), 同时现代浏览器能下载也能会自动解析成中文文件名*/
+        response.setContentType("application/octet-stream");
+        responseExcelName = URLEncoder.encode(responseExcelName + ".xlsx", "UTF-8");
+        response.setHeader("Content-Disposition", "attachment;filename=" + responseExcelName);
 
         /*使用流将文件传输回去*/
         ServletOutputStream out = null;

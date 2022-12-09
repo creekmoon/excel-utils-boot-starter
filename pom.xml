@@ -8,7 +8,7 @@
     <name>excel-utils-parent</name>
     <artifactId>excel-utils-parent</artifactId>
     <packaging>pom</packaging>
-    <version>1.1.1</version>
+    <version>1.1.4</version>
     <modules>
         <module>excel-utils-boot-starter</module>
         <!--<module>excel-utils-example</module>-->
@@ -38,7 +38,17 @@
             <!--excel读取依赖-->
             <dependency>
                 <groupId>org.apache.poi</groupId>
+                <artifactId>poi</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
                 <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml-schemas</artifactId>
                 <version>${poi.version}</version>
             </dependency>
             <!--excel的SAX读取方式依赖-->
@@ -90,15 +100,16 @@
         </dependencies>
     </dependencyManagement>
     <properties>
-        <current.version>1.1.1</current.version>
+        <current.version>1.1.4</current.version>
         <jackson.version>2.12.6</jackson.version>
         <swagger.version>2.8.0</swagger.version>
         <knife4j.version>2.0.9</knife4j.version>
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
         <spring-boot.version>2.6.8</spring-boot.version>
-        <poi.version>5.2.3</poi.version>
+        <poi.version>4.1.2</poi.version>
         <xercesImpl.version>2.11.0</xercesImpl.version>
+        <commons-compress.version>1.21</commons-compress.version>
     </properties>
 
 

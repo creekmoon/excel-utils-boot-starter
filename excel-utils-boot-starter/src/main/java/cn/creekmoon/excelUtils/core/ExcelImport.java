@@ -4,19 +4,26 @@ import cn.creekmoon.excelUtils.config.ExcelUtilsConfig;
 import cn.creekmoon.excelUtils.converter.MataConverter;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
+import cn.creekmoon.excelUtils.hutool589.core.io.file.PathUtil;
 import cn.creekmoon.excelUtils.hutool589.core.text.StrFormatter;
+import cn.creekmoon.excelUtils.hutool589.core.text.csv.CsvReader;
+import cn.creekmoon.excelUtils.hutool589.core.text.csv.CsvRow;
 import cn.creekmoon.excelUtils.hutool589.core.util.StrUtil;
 import cn.creekmoon.excelUtils.hutool589.poi.excel.ExcelReader;
 import cn.creekmoon.excelUtils.hutool589.poi.excel.ExcelUtil;
 import cn.creekmoon.excelUtils.hutool589.poi.excel.sax.Excel07SaxReader;
 import cn.creekmoon.excelUtils.hutool589.poi.excel.sax.handler.RowHandler;
+import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -163,12 +170,12 @@ public class ExcelImport<R> {
 //            }
 //        }
 
-
-        //新版读取 使用SAX读取模式
-        Excel07SaxReader excel07SaxReader = initSaxReader(dataConsumer);
         /*尝试拿锁*/
         importSemaphore.acquire();
         try {
+            this.csvSupport();
+            //新版读取 使用SAX读取模式
+            Excel07SaxReader excel07SaxReader = initSaxReader(dataConsumer);
             /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
             excel07SaxReader.read(file.getInputStream(), -1);
         } catch (Exception e) {
@@ -184,6 +191,42 @@ public class ExcelImport<R> {
         return this;
     }
 
+
+    /**
+     * 支持csv类型的文件  本质是内部将csv转为xlsx
+     *
+     * @return
+     */
+    @SneakyThrows
+    public ExcelImport<R> csvSupport() {
+
+        if (StrUtil.isBlank(this.file.getOriginalFilename()) || !this.file.getOriginalFilename().toLowerCase().contains(".csv")) {
+            /*如果不是csv文件 跳过这个方法*/
+            return this;
+        }
+
+
+        /*获取CSV文件并尝试读取*/
+        ExcelExport<Object> newExcel = ExcelExport.create("csv2xlsx");
+        try {
+            CsvReader read = new CsvReader(new InputStreamReader(file.getInputStream()), null);
+            Iterator<CsvRow> rowIterator = read.iterator();
+            while (rowIterator.hasNext()) {
+                newExcel.getBigExcelWriter().writeRow(rowIterator.next().getRawList());
+            }
+        } catch (Exception e) {
+            log.error("csv转换异常!", e);
+            e.printStackTrace();
+            this.file = null;
+        } finally {
+            CleanTempFilesExecutor.cleanTempFileDelay(newExcel.stopWrite(), 10);
+        }
+
+        /*将新的xlsx文件替换为当前的文件*/
+        this.file = new MockMultipartFile("csv2xlsx.xlsx", PathUtil.getInputStream(Paths.get(PathFinder.getAbsoluteFilePath(newExcel.taskId))));
+        return this;
+    }
+
     /**
      * 读取Excel内容到一个List (内存模式)
      *
@@ -193,6 +236,7 @@ public class ExcelImport<R> {
     public List<R> readAll(ConvertStrategy convertStrategy) {
         importSemaphore.acquire();
         try {
+            this.csvSupport();
             /*初始化读取器*/
             ExcelReader memoryReader = initMemoryReader();
             /*是否存在读取不通过的情况*/
