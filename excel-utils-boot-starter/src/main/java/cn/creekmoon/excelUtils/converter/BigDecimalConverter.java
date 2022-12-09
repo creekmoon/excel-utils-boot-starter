@@ -1,0 +1,21 @@
+package cn.creekmoon.excelUtils.converter;
+
+import java.math.BigDecimal;
+
+/**
+ * @author JY
+ */
+public class BigDecimalConverter {
+
+
+    /**
+     * 浮点数值转换器
+     *
+     * @param str 119.12 或  1,112.99
+     * @return
+     */
+    public static BigDecimal parse(String str) {
+        str = str.replaceAll(",", "");
+        return new BigDecimal(str);
+    }
+}
