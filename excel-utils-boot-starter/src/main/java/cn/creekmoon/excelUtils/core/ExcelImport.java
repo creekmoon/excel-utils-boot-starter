@@ -4,7 +4,7 @@ import cn.creekmoon.excelUtils.config.ExcelUtilsConfig;
 import cn.creekmoon.excelUtils.converter.MataConverter;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
-import cn.creekmoon.excelUtils.hutool589.core.io.file.PathUtil;
+import cn.creekmoon.excelUtils.hutool589.core.io.FileUtil;
 import cn.creekmoon.excelUtils.hutool589.core.text.StrFormatter;
 import cn.creekmoon.excelUtils.hutool589.core.text.csv.CsvReader;
 import cn.creekmoon.excelUtils.hutool589.core.text.csv.CsvRow;
@@ -23,7 +23,6 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -223,7 +222,7 @@ public class ExcelImport<R> {
         }
 
         /*将新的xlsx文件替换为当前的文件*/
-        this.file = new MockMultipartFile("csv2xlsx.xlsx", PathUtil.getInputStream(Paths.get(PathFinder.getAbsoluteFilePath(newExcel.taskId))));
+        this.file = new MockMultipartFile("csv2xlsx.xlsx", FileUtil.getInputStream(PathFinder.getAbsoluteFilePath(newExcel.taskId)));
         return this;
     }
 
