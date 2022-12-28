@@ -316,7 +316,9 @@ public class ExcelExport<R> {
      */
     public static void response(String taskId, String responseExcelName, HttpServletResponse response) throws IOException {
         try {
-            responseByFilePath(PathFinder.getAbsoluteFilePath(taskId), responseExcelName, response);
+            if (response != null) {
+                responseByFilePath(PathFinder.getAbsoluteFilePath(taskId), responseExcelName, response);
+            }
         } finally {
             cleanTempFile(taskId);
         }
@@ -367,7 +369,7 @@ public class ExcelExport<R> {
     }
 
     /**
-     * 响应并清除
+     * 响应并清除文件
      *
      * @param response
      * @throws IOException
