@@ -1,6 +1,7 @@
 package cn.creekmoon.excelUtils.core;
 
 
+import cn.creekmoon.excelUtils.hutool589.core.collection.ListUtil;
 import cn.creekmoon.excelUtils.hutool589.core.io.FileUtil;
 import cn.creekmoon.excelUtils.hutool589.core.io.IoUtil;
 import cn.creekmoon.excelUtils.hutool589.core.lang.UUID;
@@ -8,8 +9,12 @@ import cn.creekmoon.excelUtils.hutool589.core.util.ArrayUtil;
 import cn.creekmoon.excelUtils.hutool589.core.util.StrUtil;
 import cn.creekmoon.excelUtils.hutool589.poi.excel.BigExcelWriter;
 import cn.creekmoon.excelUtils.hutool589.poi.excel.ExcelUtil;
+import cn.creekmoon.excelUtils.hutool589.poi.excel.style.StyleUtil;
 import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
@@ -17,7 +22,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -30,6 +37,12 @@ public class ExcelExport<R> {
      * 表头集合
      */
     private List<Title<R>> titles = new ArrayList<>();
+    /**
+     * 表头集合
+     */
+    private HashMap<Integer, List<ConditionStyle>> colIndex2Styles = new HashMap<>();
+
+
     /* 多级表头时会用到 全局标题深度  initTitle方法会给其赋值
      *
      *   |       title               |     深度=3    rowIndex=0
@@ -81,6 +94,26 @@ public class ExcelExport<R> {
         titles.add(Title.of(titleName, valueFunction));
         return this;
     }
+
+    public ExcelExport<R> addConditionStyle(Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
+        /*初始化样式*/
+//        CellStyle newCellStyle = getBigExcelWriter().createCellStyle();
+        XSSFCellStyle newCellStyle = (XSSFCellStyle) StyleUtil.createDefaultCellStyle(getBigExcelWriter().getWorkbook());
+        styleInitializer.accept(newCellStyle);
+        ConditionStyle conditionStyle = new ConditionStyle(condition, newCellStyle);
+
+        /*保存映射结果*/
+        if (!colIndex2Styles.containsKey(titles.size() - 1)) {
+            colIndex2Styles.put(titles.size() - 1, new ArrayList<>());
+        }
+        colIndex2Styles.get(titles.size() - 1).add(conditionStyle);
+        return this;
+    }
+
+    public ExcelExport<R> addStyle(Consumer<XSSFCellStyle> styleInitializer) {
+        return this.addConditionStyle(x -> true, styleInitializer);
+    }
+
 
     public ExcelExport<R> debug() {
         this.debugger = true;
@@ -149,8 +182,45 @@ public class ExcelExport<R> {
                                     return row;
                                 })
                         .collect(Collectors.toList());
-        getBigExcelWriter().write(rows);
+
+        /*一口气写入, 让内部组件自己自动分批写到磁盘  区别是这样就不能设置style了*/
+        //getBigExcelWriter().write(rows);
+
+        /*将传入过来的rows按每批100次进行写入到硬盘 此时可以设置style, 底层不会报"已经写入磁盘无法编辑"的异常*/
+        List<List<R>> subVos = ListUtil.partition(vos, BigExcelWriter.DEFAULT_WINDOW_SIZE);
+        List<List<List<Object>>> subRows = ListUtil.partition(rows, BigExcelWriter.DEFAULT_WINDOW_SIZE);
+        for (int i = 0; i < subRows.size(); i++) {
+            int startRowIndex = getBigExcelWriter().getCurrentRow();
+            getBigExcelWriter().write(subRows.get(i));
+            int endRowIndex = getBigExcelWriter().getCurrentRow();
+            setStyle(subVos.get(i), startRowIndex, endRowIndex);
+        }
+
+
         return this;
+    }
+
+
+    /**
+     * 给excel设置样式
+     *
+     * @param vos
+     * @param startRowIndex
+     * @param endRowIndex
+     */
+    private void setStyle(List<R> vos, int startRowIndex, int endRowIndex) {
+        for (int i = 0; i < vos.size(); i++) {
+            R vo = vos.get(i);
+            for (int colIndex = 0; colIndex < titles.size(); colIndex++) {
+                List<ConditionStyle> styleList = colIndex2Styles.getOrDefault(colIndex, Collections.emptyList());
+                for (ConditionStyle conditionStyle : styleList) {
+                    if (conditionStyle.condition.test(vo)) {
+                        /*写回样式*/
+                        getBigExcelWriter().setStyle(conditionStyle.style, colIndex, startRowIndex + i);
+                    }
+                }
+            }
+        }
     }
 
     public static void cleanTempFile(String taskId) {
@@ -517,5 +587,12 @@ public class ExcelExport<R> {
         CONTINUE_ON_ERROR,
         /*遇到任何失败的情况则停止*/
         STOP_ON_ERROR;
+    }
+
+    /*条件样式*/
+    @AllArgsConstructor
+    private class ConditionStyle {
+        Predicate<R> condition;
+        CellStyle style;
     }
 }
