@@ -83,13 +83,6 @@ public class ExampleController {
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName)
                 .addTitle("额外附加信息::年龄", Student::getAge)
-                .addConditionStyle(student -> student.getAge() > 25,
-                        cellStyle ->
-                        {
-                            cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
-                            cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-                        }
-                )
                 .addTitle("额外附加信息::邮箱", Student::getEmail)
                 .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
                 .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
@@ -105,21 +98,9 @@ public class ExampleController {
                 .switchSheet("第一个标签页", Student.class)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName)
-                .addStyle(cellStyle ->
-                {
-                    cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
-                    cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-                })
                 .write(result)
                 .switchSheet("第二个标签页", Student.class)
                 .addTitle("额外附加信息::年龄", Student::getAge)
-                .addConditionStyle(student -> student.getAge() > 25,
-                        cellStyle ->
-                        {
-                            cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
-                            cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-                        }
-                )
                 .addTitle("额外附加信息::邮箱", Student::getEmail)
                 .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
                 .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
