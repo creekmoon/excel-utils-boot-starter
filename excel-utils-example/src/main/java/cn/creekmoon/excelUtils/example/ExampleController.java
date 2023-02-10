@@ -99,7 +99,7 @@ public class ExampleController {
 
     @GetMapping(value = "/exportExcel4")
     @ApiOperation("构建多个Sheet页,导出数据")
-    public void exportExcel5(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void exportExcel4(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(60_000);
         ExcelExport.create("lalala", Student.class)
                 .switchSheet("第一个标签页", Student.class)
@@ -113,6 +113,37 @@ public class ExampleController {
                 .write(result)
                 .switchSheet("第二个标签页", Student.class)
                 .addTitle("额外附加信息::年龄", Student::getAge)
+                .addConditionStyle(student -> student.getAge() > 25,
+                        cellStyle ->
+                        {
+                            cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+                            cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                        }
+                )
+                .addTitle("额外附加信息::邮箱", Student::getEmail)
+                .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
+                .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
+                .write(result)
+                .response(response);
+    }
+
+
+    @GetMapping(value = "/exportExcel5")
+    @ApiOperation("构建多个Sheet页,导出数据,并设置style")
+    public void exportExcel5(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        ArrayList<Student> result = createStudentList(60_000);
+        ExcelExport.create("lalala", Student.class)
+                .switchSheet("第一个标签页", Student.class)
+                .addTitle("基本信息::用户名", Student::getUserName)
+                .addTitle("基本信息::全名(全部标黄)", Student::getFullName)
+                .addStyle(cellStyle ->
+                {
+                    cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+                    cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                })
+                .write(result)
+                .switchSheet("第二个标签页", Student.class)
+                .addTitle("额外附加信息::年龄(大于25标黄)", Student::getAge)
                 .addConditionStyle(student -> student.getAge() > 25,
                         cellStyle ->
                         {
