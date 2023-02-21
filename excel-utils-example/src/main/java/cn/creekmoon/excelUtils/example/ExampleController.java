@@ -125,7 +125,7 @@ public class ExampleController {
                 .write(result)
                 .switchSheet("第二个标签页", Student.class)
                 .addTitle("额外附加信息::年龄(大于25标黄)", Student::getAge)
-                .setConditionDataStyle(student -> student.getAge() > 25,
+                .setDataStyle(student -> student.getAge() > 25,
                         cellStyle ->
                         {
                             cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());

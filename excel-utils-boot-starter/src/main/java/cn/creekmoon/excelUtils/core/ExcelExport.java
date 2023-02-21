@@ -95,8 +95,16 @@ public class ExcelExport<R> {
         return this;
     }
 
-    public ExcelExport<R> setConditionDataStyle(Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
-        return addConditionStyle(titles.size() - 1, condition, styleInitializer);
+
+    /**
+     * 为当前列设置一个样式
+     *
+     * @param condition        样式触发的条件
+     * @param styleInitializer 样式初始化器
+     * @return
+     */
+    public ExcelExport<R> setDataStyle(Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
+        return setDataStyle(titles.size() - 1, condition, styleInitializer);
     }
 
     /**
@@ -107,7 +115,7 @@ public class ExcelExport<R> {
      * @param styleInitializer 样式的初始化内容
      * @return
      */
-    public ExcelExport<R> addConditionStyle(int colIndex, Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
+    public ExcelExport<R> setDataStyle(int colIndex, Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
         /*初始化样式*/
 //        CellStyle newCellStyle = getBigExcelWriter().createCellStyle();
         XSSFCellStyle newCellStyle = (XSSFCellStyle) StyleUtil.createDefaultCellStyle(getBigExcelWriter().getWorkbook());
@@ -122,8 +130,15 @@ public class ExcelExport<R> {
         return this;
     }
 
+
+    /**
+     * 为当前列的数据设置一个样式
+     *
+     * @param styleInitializer 样式初始化器
+     * @return
+     */
     public ExcelExport<R> setDataStyle(Consumer<XSSFCellStyle> styleInitializer) {
-        return this.setConditionDataStyle(x -> true, styleInitializer);
+        return this.setDataStyle(x -> true, styleInitializer);
     }
 
 
