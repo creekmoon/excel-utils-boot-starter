@@ -95,7 +95,27 @@ public class ExcelExport<R> {
         return this;
     }
 
-    public ExcelExport<R> addConditionStyle(Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
+
+    /**
+     * 为当前列设置一个样式
+     *
+     * @param condition        样式触发的条件
+     * @param styleInitializer 样式初始化器
+     * @return
+     */
+    public ExcelExport<R> setDataStyle(Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
+        return setDataStyle(titles.size() - 1, condition, styleInitializer);
+    }
+
+    /**
+     * 添加excel样式映射,在写入的时候会读取这个映射
+     *
+     * @param colIndex         对应的列号
+     * @param condition        样式的触发条件
+     * @param styleInitializer 样式的初始化内容
+     * @return
+     */
+    public ExcelExport<R> setDataStyle(int colIndex, Predicate<R> condition, Consumer<XSSFCellStyle> styleInitializer) {
         /*初始化样式*/
 //        CellStyle newCellStyle = getBigExcelWriter().createCellStyle();
         XSSFCellStyle newCellStyle = (XSSFCellStyle) StyleUtil.createDefaultCellStyle(getBigExcelWriter().getWorkbook());
@@ -103,15 +123,22 @@ public class ExcelExport<R> {
         ConditionStyle conditionStyle = new ConditionStyle(condition, newCellStyle);
 
         /*保存映射结果*/
-        if (!colIndex2Styles.containsKey(titles.size() - 1)) {
-            colIndex2Styles.put(titles.size() - 1, new ArrayList<>());
+        if (!colIndex2Styles.containsKey(colIndex)) {
+            colIndex2Styles.put(colIndex, new ArrayList<>());
         }
-        colIndex2Styles.get(titles.size() - 1).add(conditionStyle);
+        colIndex2Styles.get(colIndex).add(conditionStyle);
         return this;
     }
 
-    public ExcelExport<R> addStyle(Consumer<XSSFCellStyle> styleInitializer) {
-        return this.addConditionStyle(x -> true, styleInitializer);
+
+    /**
+     * 为当前列的数据设置一个样式
+     *
+     * @param styleInitializer 样式初始化器
+     * @return
+     */
+    public ExcelExport<R> setDataStyle(Consumer<XSSFCellStyle> styleInitializer) {
+        return this.setDataStyle(x -> true, styleInitializer);
     }
 
 
@@ -193,7 +220,7 @@ public class ExcelExport<R> {
             int startRowIndex = getBigExcelWriter().getCurrentRow();
             getBigExcelWriter().write(subRows.get(i));
             int endRowIndex = getBigExcelWriter().getCurrentRow();
-            setStyle(subVos.get(i), startRowIndex, endRowIndex);
+            setDataStyle(subVos.get(i), startRowIndex, endRowIndex);
         }
 
 
@@ -208,7 +235,7 @@ public class ExcelExport<R> {
      * @param startRowIndex
      * @param endRowIndex
      */
-    private void setStyle(List<R> vos, int startRowIndex, int endRowIndex) {
+    private void setDataStyle(List<R> vos, int startRowIndex, int endRowIndex) {
         for (int i = 0; i < vos.size(); i++) {
             R vo = vos.get(i);
             for (int colIndex = 0; colIndex < titles.size(); colIndex++) {

@@ -117,7 +117,7 @@ public class ExampleController {
                 .switchSheet("第一个标签页", Student.class)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名(全部标黄)", Student::getFullName)
-                .addStyle(cellStyle ->
+                .setDataStyle(cellStyle ->
                 {
                     cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
                     cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
@@ -125,7 +125,7 @@ public class ExampleController {
                 .write(result)
                 .switchSheet("第二个标签页", Student.class)
                 .addTitle("额外附加信息::年龄(大于25标黄)", Student::getAge)
-                .addConditionStyle(student -> student.getAge() > 25,
+                .setDataStyle(student -> student.getAge() > 25,
                         cellStyle ->
                         {
                             cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
