@@ -12,5 +12,5 @@ public class ExcelConstants {
 
     public static final String FIELD_LACK_MSG = "字段[{}]为必填项! 请检查格式！";
 
-    public static final String TITLE_CHECK_ERROR = "模板检查不通过!请核对模板是否一致!";
+    public static final String TITLE_CHECK_ERROR = "模板检查不通过!请核对导入模板是否有调整?";
 }

@@ -67,9 +67,10 @@ public class ExcelImport<R> {
      */
     private ExcelExport excelExport;
 
-    /*启用EXCEL标题一致性检查  用于判断是否传错了模板*/
-    boolean ENABLE_TITLE_CHECK = true;
-
+    /*启用EXCEL标题模板一致性检查 为了防止标题重复 这里默认为true */
+    public boolean ENABLE_TITLE_CHECK = true;
+    /*如果标题检查出现失败, 则说明所有都失败, 这是一个性能优化. */
+    private boolean FORCE_TITLE_CHECK_FAIL = false;
     //============================内存读取模式对象==========================
     /* 所有原生的Excel行 */
     private List<Map<String, Object>> rows;
@@ -309,12 +310,14 @@ public class ExcelImport<R> {
      * @throws Exception
      */
     private void rowConvert(Map<String, Object> row) throws Exception {
-
         /*进行模板一致性检查*/
-        if (ENABLE_TITLE_CHECK && !titleConsistencyCheck(new ArrayList<>(title2converts.keySet()), new ArrayList<>(row.keySet()))) {
-            throw new CheckedExcelException(TITLE_CHECK_ERROR);
+        if (ENABLE_TITLE_CHECK) {
+            if (FORCE_TITLE_CHECK_FAIL || !titleConsistencyCheck(title2converts.keySet(), row.keySet())) {
+                FORCE_TITLE_CHECK_FAIL = true;
+                throw new CheckedExcelException(TITLE_CHECK_ERROR);
+            }
         }
-
+        ENABLE_TITLE_CHECK = false;
 
         /*初始化空对象*/
         currentObject = newObjectSupplier.get();
@@ -353,9 +356,13 @@ public class ExcelImport<R> {
      *
      * @return
      */
-    private Boolean titleConsistencyCheck(List<String> titles1, List<String> titles2) {
-
-        return true;
+    private Boolean titleConsistencyCheck(Set<String> titles1, Set<String> titles2) {
+        if (titles1.size() != titles2.size()) {
+            return false;
+        }
+        List<String> list1 = new ArrayList<>(titles1);
+        List<String> list2 = new ArrayList<>(titles2);
+        return list1.equals(list2);
     }
 
     /**
