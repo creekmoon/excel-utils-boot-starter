@@ -310,11 +310,10 @@ public class ExcelImport<R> {
      */
     private void rowConvert(Map<String, Object> row) throws Exception {
 
-        /*进行模板一致性检查, 当检查通过后, 将不再进行检查*/
+        /*进行模板一致性检查*/
         if (ENABLE_TITLE_CHECK && !titleConsistencyCheck(new ArrayList<>(title2converts.keySet()), new ArrayList<>(row.keySet()))) {
             throw new CheckedExcelException(TITLE_CHECK_ERROR);
         }
-        ENABLE_TITLE_CHECK = false;
 
 
         /*初始化空对象*/
