@@ -52,9 +52,9 @@ public class ExcelImport<R> {
     public int titleRowIndex = 0;
 
     /* key=title  value=执行器 */
-    private Map<String, ExFunction> title2converts = new LinkedHashMap(32);
+    private LinkedHashMap<String, ExFunction> title2converts = new LinkedHashMap(32);
     /* key=title value=消费者(通常是setter方法)*/
-    private Map<String, BiConsumer> title2consumers = new LinkedHashMap(32);
+    private LinkedHashMap<String, BiConsumer> title2consumers = new LinkedHashMap(32);
     /* key=title */
     private Set<String> mustExistTitles = new HashSet<>(32);
     private Set<String> skipEmptyTitles = new HashSet<>(32);
@@ -67,6 +67,8 @@ public class ExcelImport<R> {
      */
     private ExcelExport excelExport;
 
+    /*启用EXCEL标题一致性检查  用于判断是否传错了模板*/
+    boolean ENABLE_TITLE_CHECK = true;
 
     //============================内存读取模式对象==========================
     /* 所有原生的Excel行 */
@@ -307,6 +309,14 @@ public class ExcelImport<R> {
      * @throws Exception
      */
     private void rowConvert(Map<String, Object> row) throws Exception {
+
+        /*进行模板一致性检查, 当检查通过后, 将不再进行检查*/
+        if (ENABLE_TITLE_CHECK && !titleConsistencyCheck(new ArrayList<>(title2converts.keySet()), new ArrayList<>(row.keySet()))) {
+            throw new CheckedExcelException(TITLE_CHECK_ERROR);
+        }
+        ENABLE_TITLE_CHECK = false;
+
+
         /*初始化空对象*/
         currentObject = newObjectSupplier.get();
         /*最大转换次数*/
@@ -336,6 +346,17 @@ public class ExcelImport<R> {
                 throw new CheckedExcelException(StrFormatter.format(ExcelConstants.CONVERT_FAIL_MSG + GlobalExceptionManager.getExceptionMsg(e), entry.getKey()));
             }
         }
+    }
+
+
+    /**
+     * 标题一致性检查
+     *
+     * @return
+     */
+    private Boolean titleConsistencyCheck(List<String> titles1, List<String> titles2) {
+
+        return true;
     }
 
     /**
