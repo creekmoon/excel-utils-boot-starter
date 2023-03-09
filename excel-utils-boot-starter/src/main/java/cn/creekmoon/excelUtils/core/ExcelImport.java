@@ -327,7 +327,7 @@ public class ExcelImport<R> {
         for (Map.Entry<String, Object> entry : row.entrySet()) {
             /*如果包含不支持的标题,  或者已经超过最大次数则不再进行读取*/
             if (!title2consumers.containsKey(entry.getKey()) || maxConvertCount-- <= 0) {
-                break;
+                continue;
             }
             String value = Optional.ofNullable(entry.getValue()).map(x -> (String) x).orElse("");
             /*检查必填项/检查可填项*/
@@ -354,15 +354,15 @@ public class ExcelImport<R> {
     /**
      * 标题一致性检查
      *
+     * @param targetTitles 我们声明的要拿取的标题
+     * @param sourceTitles 传过来的excel文件标题
      * @return
      */
-    private Boolean titleConsistencyCheck(Set<String> titles1, Set<String> titles2) {
-        if (titles1.size() != titles2.size()) {
+    private Boolean titleConsistencyCheck(Set<String> targetTitles, Set<String> sourceTitles) {
+        if (targetTitles.size() > sourceTitles.size()) {
             return false;
         }
-        List<String> list1 = new ArrayList<>(titles1);
-        List<String> list2 = new ArrayList<>(titles2);
-        return list1.equals(list2);
+        return sourceTitles.containsAll(targetTitles);
     }
 
     /**
