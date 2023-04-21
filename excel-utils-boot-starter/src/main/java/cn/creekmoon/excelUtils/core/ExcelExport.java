@@ -53,8 +53,16 @@ public class ExcelExport<R> {
     /* 多级表头时会用到  深度和标题的映射关系*/
     HashMap<Integer, List<Title>> depth2Titles = new HashMap<>();
 
+    /**
+     * 当前写入行,切换sheet页时需要还原这个上下文数据
+     */
+
     private String currentSheetName;
 
+    /**
+     * 当前写入行,切换sheet页时需要还原这个上下文数据
+     */
+    private int currentRow;
     /**
      * 打印调试内容
      */
@@ -65,6 +73,10 @@ public class ExcelExport<R> {
     private String excelName;
     /*写入器*/
     private BigExcelWriter bigExcelWriter;
+    /*
+     * sheet页和导出对象的映射关系
+     * */
+    private Map<String, ExcelExport> sheetName2ExcelExport = new HashMap<>();
 
     private ExcelExport() {
 
@@ -80,12 +92,21 @@ public class ExcelExport<R> {
         return ExcelExport.create(excelName, Object.class);
     }
 
+    public static ExcelExport<Object> create() {
+        return create("ExcelExport", Object.class);
+    }
+
     public static <T> ExcelExport<T> create(String excelName, Class<T> c) {
         ExcelExport<T> excelExport = new ExcelExport();
         excelExport.excelName = excelName;
         excelExport.taskId = UUID.fastUUID().toString();
         return excelExport;
     }
+
+    public static <T> ExcelExport<T> create(Class<T> c) {
+        return create("ExcelExport", c);
+    }
+
 
     /**
      * 添加标题
@@ -591,18 +612,34 @@ public class ExcelExport<R> {
         }
     }
 
+
     /**
-     * 切换到新的标签页,注意不能再切换回来
+     * 切换到新的标签页
      */
     public <T> ExcelExport<T> switchSheet(String sheetName, Class<T> newDataClass) {
-        /*初始化一个新的对象  继承了当前的写入器和一些基本信息 只是切换了sheet页*/
-        ExcelExport<T> excelExport = ExcelExport.create(this.excelName, newDataClass);
-        excelExport.currentSheetName = sheetName;
-        excelExport.taskId = taskId;
-        excelExport.debugger = debugger;
-        excelExport.bigExcelWriter = bigExcelWriter;
-        excelExport.getBigExcelWriter().setSheet(sheetName);
-        return excelExport;
+        /*保存当前的写入行数*/
+        this.currentRow = Optional.ofNullable(bigExcelWriter)
+                .map(BigExcelWriter::getCurrentRow)
+                .orElse(0);
+
+        /*尝试获取已存在的sheet*/
+        ExcelExport cached = sheetName2ExcelExport.get(sheetName);
+        if (cached != null) {
+            cached.getBigExcelWriter().setSheet(cached.currentSheetName);
+            cached.getBigExcelWriter().setCurrentRow(cached.currentRow);
+            return cached;
+        }
+
+        /*创建一个新的导出对象, 并关联一个新的sheet*/
+        ExcelExport<T> newExcelExport = ExcelExport.create(this.excelName, newDataClass);
+        newExcelExport.currentSheetName = sheetName;
+        newExcelExport.taskId = taskId;
+        newExcelExport.debugger = debugger;
+        newExcelExport.bigExcelWriter = bigExcelWriter;
+        newExcelExport.sheetName2ExcelExport = sheetName2ExcelExport;
+        newExcelExport.getBigExcelWriter().setSheet(sheetName);
+        this.sheetName2ExcelExport.put(sheetName, newExcelExport);
+        return newExcelExport;
     }
 
 

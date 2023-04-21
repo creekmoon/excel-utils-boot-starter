@@ -39,7 +39,7 @@ public class ExampleController {
     private static final Map<String, AsyncTaskState> taskId2TaskState = new ConcurrentHashMap<>();
 
     @GetMapping(value = "/exportExcel")
-    @ApiOperation("单次查询,并导出数据")
+    @ApiOperation("单次查询")
     public void exportExcel(Integer size, HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(size != null ? size : 60_000);
         ExcelExport.create(StrFormatter.format("导出数据"), Student.class)
@@ -55,7 +55,7 @@ public class ExampleController {
 
 
     @GetMapping(value = "/exportExcel2")
-    @ApiOperation("多次查询,并导出数据")
+    @ApiOperation("多次查询")
     public void exportExcel2(HttpServletRequest request, HttpServletResponse response) throws IOException {
 
         /*构建表头*/
@@ -76,7 +76,7 @@ public class ExampleController {
 
 
     @GetMapping(value = "/exportExcel3")
-    @ApiOperation("构建多级表头,导出数据")
+    @ApiOperation("多级表头")
     public void exportExcel3(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(60_000);
         ExcelExport.create("lalala", Student.class)
@@ -94,7 +94,7 @@ public class ExampleController {
     @ApiOperation("构建多个Sheet页,导出数据")
     public void exportExcel4(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(60_000);
-        ExcelExport.create("lalala", Student.class)
+        ExcelExport.create(Student.class)
                 .switchSheet("第一个标签页", Student.class)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName)
@@ -105,16 +105,24 @@ public class ExampleController {
                 .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
                 .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
                 .write(result)
+//                .switchSheet("第一个标签页", Student.class)
+//                .write(result)
                 .response(response);
     }
 
 
     @GetMapping(value = "/exportExcel5")
-    @ApiOperation("构建多个Sheet页,导出数据,并设置style")
+    @ApiOperation("设置style")
     public void exportExcel5(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(60_000);
-        ExcelExport.create("lalala", Student.class)
-                .switchSheet("第一个标签页", Student.class)
+        ExcelExport<Student> excelExport = ExcelExport.create("excelExport", Student.class);
+        excelExport = excelExport.switchSheet("第一个标签页", Student.class);
+
+        /*定义一个全局的数据样式  double是千分号和保留两位小数  int是千分号,保留整数*/
+        short dataFormat_double = excelExport.getBigExcelWriter().getWorkbook().createDataFormat().getFormat("#,##0.00");
+        short dataFormat_int = excelExport.getBigExcelWriter().getWorkbook().createDataFormat().getFormat("#,##0");
+
+        excelExport
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名(全部标黄)", Student::getFullName)
                 .setDataStyle(cellStyle ->
@@ -124,12 +132,18 @@ public class ExampleController {
                 })
                 .write(result)
                 .switchSheet("第二个标签页", Student.class)
-                .addTitle("额外附加信息::年龄(大于25标黄)", Student::getAge)
+                .addTitle("额外附加信息::年龄(大于25标黄,小于等于25则保留两位小数)", Student::getAge)
                 .setDataStyle(student -> student.getAge() > 25,
                         cellStyle ->
                         {
                             cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
                             cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                        }
+                )
+                .setDataStyle(student -> student.getAge() <= 25,
+                        cellStyle ->
+                        {
+                            cellStyle.setDataFormat(dataFormat_double);
                         }
                 )
                 .addTitle("额外附加信息::邮箱", Student::getEmail)
