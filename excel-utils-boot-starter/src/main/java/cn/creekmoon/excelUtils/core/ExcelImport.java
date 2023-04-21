@@ -100,7 +100,6 @@ public class ExcelImport<R> {
         ExcelImport<T> excelImport = new ExcelImport();
         excelImport.newObjectSupplier = supplier;
         excelImport.file = file;
-
         /*初始化一个导入结果*/
         DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH-mm");
         excelImport.excelExport = ExcelExport.create("import_result[" + LocalDateTime.now().format(dateTimeFormatter) + "]");

@@ -7,9 +7,7 @@
 
 公司最初基于POI封装了的Excel的工具类. 但后来因为种种原因需要更新这个玩意.
 
-首先想到的是使用easy-excel替换, 研究了一下发现easy-excel并不easy.
-
-easy-excel它基于注解的形式对于动态表头并不友好,若使用代码进行配置还挺复杂,咱就只想简单的导入导出, 不希望搞太多的功能
+easy-excel它基于注解的形式对于动态表头并不友好
 
 看了一圈网上都没什么现成的工具, 于是只能就自己手撸一个了.
 
@@ -27,7 +25,7 @@ easy-excel它基于注解的形式对于动态表头并不友好,若使用代码
 <dependency>
     <groupId>io.github.creekmoon</groupId>
     <artifactId>excel-utils-boot-starter</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.11</version>
 </dependency>
 ```
 
@@ -48,6 +46,8 @@ public class ExampleApplication {
 }
 ```
 
+<details>
+<summary>参数说明</summary>
 ##### 可选参数:
 
 customExceptions: 自定义异常,若导入过程中抛出这些异常, 则会以其msg作为导入的结果.
@@ -60,13 +60,11 @@ tempFileLifeMinutes: 临时文件寿命 导出时会保存一份临时文件在�
 @EnableExcelUtils(customExceptions = {MyNewException.class}, importMaxParallel = 4, tempFileLifeMinutes = 5)
 ```
 
-### 2.使用ExcelExport导出简单表格
+</details>
+
+### 2.导出简单表格
 
 如下例子, 导出学生表的Excel,
-
-- 使用 **ExcelExport.create()** 创建初始化本次导出, 第一个参数是返回给前端的文件名称, 第二个参数本次导出目标class.
-- 使用 **addTitle()** 增加标题, 第一个参数是标题的名称, 第二个参数是一个lambda表达式, 定义如何从class实例中获取数据
-- 使用 **write()** 写入数据
 
 ```java
 @GetMapping(value = "/exportExcel")
@@ -83,7 +81,14 @@ public void exportExcel(HttpServletRequest request,HttpServletResponse response)
 
 如上几行代码, 已经完成了一个导出的响应.
 
-### 3.使用ExcelExport导出多级表头表格
+<details>
+<summary>参数说明</summary>
+- 使用 **ExcelExport.create()** 创建初始化本次导出, 第一个参数是返回给前端的文件名称, 第二个参数本次导出目标class.
+- 使用 **addTitle()** 增加标题, 第一个参数是标题的名称, 第二个参数是一个lambda表达式, 定义如何从class实例中获取数据
+- 使用 **write()** 写入数据
+</details>
+
+### 3.导出多级表头
 
 只需要改写title, 将父表头**以::分隔即可**. 例如 "**用户名**","**全名**"的父标题是"**基础信息**"
 
@@ -103,15 +108,8 @@ public void exportExcel(HttpServletRequest request,HttpServletResponse response)
 
 如上几行代码, 已经完成了一个导出的响应.
 
-### 4.使用ExcelImport导入简单表格
+### 4.导入表格
 
-如下例子, 导入学生表的Excel,
-
-- 使用 **ExcelImport.create()** 创建初始化本次导入, 第一个参数是前端传入的MultipartFile对象, 第二个参数本次解析的目标class.
-- 使用 **addConvert()** 增加转换器,每个转换器对应一个表头. 转换器有三个参数, 第一个参数是表头名称,
-  第二个参数是解析器,在需要校验或者转换数据类型时可以选用, 第三个参数对应目标的Setter方法
-- 使用 **read()** 读取数据
-- 使用 **response()** 响应给前端结果
 
 ```java
 @PostMapping(value = "/importExcel")
@@ -131,6 +129,18 @@ public void importExcelBySax(MultipartFile file,HttpServletRequest request,HttpS
 ```
 
 如上几行代码, 已经完成了一个导入功能
+
+<details>
+<summary>参数说明</summary>
+如下例子, 导入学生表的Excel,
+
+- 使用 **ExcelImport.create()** 创建初始化本次导入, 第一个参数是前端传入的MultipartFile对象, 第二个参数本次解析的目标class.
+- 使用 **addConvert()** 增加转换器,每个转换器对应一个表头. 转换器有三个参数, 第一个参数是表头名称,
+  第二个参数是解析器,在需要校验或者转换数据类型时可以选用, 第三个参数对应目标的Setter方法
+- 使用 **read()** 读取数据
+- 使用 **response()** 响应给前端结果
+
+</details>
 
 ## 更多例子
 
