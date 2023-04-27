@@ -281,7 +281,7 @@ public class ExcelExport<R> {
     private void initTitles() {
 
         /*如果已经初始化完毕 则不进行初始化*/
-        if (this.MAX_TITLE_DEPTH != null) {
+        if (isTitleInitialized()) {
             return;
         }
 
@@ -373,6 +373,16 @@ public class ExcelExport<R> {
         }
 
         this.setColumnWidthDefault();
+    }
+
+
+    /**
+     * 是否已经初始化好表头
+     *
+     * @return
+     */
+    private boolean isTitleInitialized() {
+        return this.MAX_TITLE_DEPTH != null;
     }
 
     /**
@@ -617,7 +627,13 @@ public class ExcelExport<R> {
      * 切换到新的标签页
      */
     public <T> ExcelExport<T> switchSheet(String sheetName, Class<T> newDataClass) {
-        /*保存当前的写入行数*/
+
+        /*如果当前sheet是空内容, 则放弃当前的sheet*/
+        if (!isTitleInitialized() && titles.isEmpty()) {
+            this.getBigExcelWriter().renameSheet(sheetName);
+        }
+
+        /*保存当前的写入记录*/
         this.currentRow = Optional.ofNullable(bigExcelWriter)
                 .map(BigExcelWriter::getCurrentRow)
                 .orElse(0);

@@ -93,20 +93,23 @@ public class ExampleController {
     @GetMapping(value = "/exportExcel4")
     @ApiOperation("构建多个Sheet页,导出数据")
     public void exportExcel4(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ArrayList<Student> result = createStudentList(60_000);
-        ExcelExport.create(Student.class)
-                .switchSheet("第一个标签页", Student.class)
+        ArrayList<Student> result = createStudentList(10_000);
+        ArrayList<Student> result2 = createStudentList(10_000);
+        ArrayList<Teacher> result3 = createTeacherList(10_000);
+        ArrayList<Teacher> result4 = createTeacherList(10_000);
+        ExcelExport.create()
+                .switchSheet("学生标签页", Student.class)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName)
                 .write(result)
-                .switchSheet("第二个标签页", Student.class)
-                .addTitle("额外附加信息::年龄", Student::getAge)
-                .addTitle("额外附加信息::邮箱", Student::getEmail)
-                .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
-                .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
-                .write(result)
-//                .switchSheet("第一个标签页", Student.class)
-//                .write(result)
+                .switchSheet("教师标签页", Teacher.class)
+                .addTitle("教师::1::教师名称", Teacher::getTeacherName)
+                .addTitle("教师::2::教师工龄", Teacher::getWorkYear)
+                .write(result3)
+                .switchSheet("学生标签页", Student.class)
+                .write(result2)
+                .switchSheet("教师标签页", Teacher.class)
+                .write(result4)
                 .response(response);
     }
 
@@ -115,14 +118,16 @@ public class ExampleController {
     @ApiOperation("设置style")
     public void exportExcel5(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(60_000);
+        ArrayList<Teacher> result2 = createTeacherList(60_000);
+
         ExcelExport<Student> excelExport = ExcelExport.create("excelExport", Student.class);
-        excelExport = excelExport.switchSheet("第一个标签页", Student.class);
 
         /*定义一个全局的数据样式  double是千分号和保留两位小数  int是千分号,保留整数*/
         short dataFormat_double = excelExport.getBigExcelWriter().getWorkbook().createDataFormat().getFormat("#,##0.00");
         short dataFormat_int = excelExport.getBigExcelWriter().getWorkbook().createDataFormat().getFormat("#,##0");
 
         excelExport
+                .switchSheet("第一个标签页", Student.class)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名(全部标黄)", Student::getFullName)
                 .setDataStyle(cellStyle ->
@@ -131,25 +136,23 @@ public class ExampleController {
                     cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                 })
                 .write(result)
-                .switchSheet("第二个标签页", Student.class)
-                .addTitle("额外附加信息::年龄(大于25标黄,小于等于25则保留两位小数)", Student::getAge)
-                .setDataStyle(student -> student.getAge() > 25,
+                .switchSheet("第二个标签页", Teacher.class)
+                .addTitle("工龄(大于5标黄,小于5保留两位小数)", Teacher::getWorkYear)
+                .setDataStyle(student -> student.getWorkYear() > 5,
                         cellStyle ->
                         {
                             cellStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
                             cellStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                         }
                 )
-                .setDataStyle(student -> student.getAge() <= 25,
+                .setDataStyle(student -> student.getWorkYear() <= 5,
                         cellStyle ->
                         {
                             cellStyle.setDataFormat(dataFormat_double);
                         }
                 )
-                .addTitle("额外附加信息::邮箱", Student::getEmail)
-                .addTitle("额外附加信息::系统数据::生日", Student::getBirthday)
-                .addTitle("额外附加信息::系统数据::过期时间", Student::getExpTime)
-                .write(result)
+                .addTitle("姓名", Teacher::getTeacherName)
+                .write(result2)
                 .response(response);
     }
 
@@ -161,7 +164,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcelBySax")
-    @ApiOperation("同步导入数据(SAX模式)")
+    @ApiOperation("同步导入数据(按行读, 底层是SAX模式)")
     public void importExcelBySax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
@@ -193,7 +196,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcelByMemory")
-    @ApiOperation("同步导入数据(内存模式)")
+    @ApiOperation("同步导入数据(读全部, 底层是内存模式)")
     public void importExcelByMemory(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
 
         ExcelImport<Student> studentExcelImport = ExcelImport.create(file, Student::new)
@@ -234,11 +237,28 @@ public class ExampleController {
         return student;
     }
 
+    private Teacher createNewTeacher() {
+        Teacher teacher = new Teacher();
+        //随机年龄
+        teacher.setWorkYear(RandomUtil.randomInt(1, 10));
+        teacher.setTeacherName(RandomUtil.randomString(5));
+        return teacher;
+    }
+
     private ArrayList<Student> createStudentList(int size) {
         ArrayList<Student> result = new ArrayList<>();
-        //加入数据 六十万
+        //加入数据
         for (int i = 0; i < size; i++) {
             result.add(createNewStudent());
+        }
+        return result;
+    }
+
+    private ArrayList<Teacher> createTeacherList(int size) {
+        ArrayList<Teacher> result = new ArrayList<>();
+        //加入数据
+        for (int i = 0; i < size; i++) {
+            result.add(createNewTeacher());
         }
         return result;
     }
