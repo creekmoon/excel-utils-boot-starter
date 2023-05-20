@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -38,7 +39,7 @@ public class ExcelImport {
     protected MultipartFile file;
 
     /*错误次数统计*/
-    protected int errorCount = 0;
+    protected AtomicInteger errorCount = new AtomicInteger(0);
     /**
      * 导入结果
      */
@@ -190,7 +191,7 @@ public class ExcelImport {
         CleanTempFilesExecutor.cleanTempFileDelay(taskId);
     }
 
-    public int getErrorCount() {
+    public AtomicInteger getErrorCount() {
         return errorCount;
     }
 }

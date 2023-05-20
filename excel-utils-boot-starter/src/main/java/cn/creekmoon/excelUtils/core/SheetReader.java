@@ -96,7 +96,7 @@ public class SheetReader<R> {
                     dataConsumer.accept(x);
                     this.setResult(x, IMPORT_SUCCESS_MSG);
                 } catch (Exception e) {
-                    parent.errorCount++;
+                    parent.getErrorCount().incrementAndGet();
                     this.setResult(x, GlobalExceptionManager.getExceptionMsg(e));
                 }
             });
@@ -196,12 +196,19 @@ public class SheetReader<R> {
     private R rowConvert(Map<String, Object> row) throws Exception {
         /*进行模板一致性检查*/
         if (sheetReaderContext.ENABLE_TITLE_CHECK) {
-            if (sheetReaderContext.FORCE_TITLE_CHECK_FAIL || !titleConsistencyCheck(sheetReaderContext.title2converts.keySet(), row.keySet())) {
-                sheetReaderContext.FORCE_TITLE_CHECK_FAIL = true;
+            if (sheetReaderContext.TITLE_CHECK_FAIL_FLAG || !titleConsistencyCheck(sheetReaderContext.title2converts.keySet(), row.keySet())) {
+                sheetReaderContext.TITLE_CHECK_FAIL_FLAG = true;
                 throw new CheckedExcelException(TITLE_CHECK_ERROR);
             }
         }
         sheetReaderContext.ENABLE_TITLE_CHECK = false;
+
+        /*过滤空白行*/
+        if (sheetReaderContext.ENABLE_BLANK_ROW_FILTER
+                && row.values().stream().allMatch(x -> x == null || "".equals(x))
+        ) {
+            return null;
+        }
 
         /*初始化空对象*/
         R convertObject = (R) this.sheetReaderContext.newObjectSupplier.get();
@@ -281,6 +288,9 @@ public class SheetReader<R> {
                 try {
                     /*转换*/
                     currentObject = rowConvert(rowData);
+                    if (currentObject == null) {
+                        return;
+                    }
                     /*转换后置处理器*/
                     for (ExConsumer convertPostProcessor : sheetReaderContext.convertPostProcessors) {
                         convertPostProcessor.accept(currentObject);
@@ -289,7 +299,7 @@ public class SheetReader<R> {
                     /*消费*/
                     dataConsumer.accept(currentObject, rowData);
                 } catch (Exception e) {
-                    parent.errorCount++;
+                    parent.getErrorCount().incrementAndGet();
                     /*写入导出Excel结果*/
                     rowData.put(RESULT_TITLE, GlobalExceptionManager.getExceptionMsg(e));
                 }
@@ -328,4 +338,23 @@ public class SheetReader<R> {
         parent.response(response);
     }
 
+    /**
+     * 禁用标题一致性检查
+     *
+     * @return
+     */
+    public SheetReader<R> disableTitleConsistencyCheck() {
+        this.sheetReaderContext.ENABLE_TITLE_CHECK = false;
+        return this;
+    }
+
+    /**
+     * 禁用空白行过滤
+     *
+     * @return
+     */
+    public SheetReader<R> disableBlankRowFilter() {
+        this.sheetReaderContext.ENABLE_BLANK_ROW_FILTER = false;
+        return this;
+    }
 }

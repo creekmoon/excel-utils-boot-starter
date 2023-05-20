@@ -21,10 +21,12 @@ public class SheetReaderContext {
     /* key=title */
     protected Set<String> mustExistTitles = new HashSet<>(32);
     protected Set<String> skipEmptyTitles = new HashSet<>(32);
-    /*启用EXCEL标题模板一致性检查 为了防止标题重复 这里默认为true */
+    /*启用空白行过滤*/
+    protected boolean ENABLE_BLANK_ROW_FILTER = true;
+    /*启用EXCEL标题模板一致性检查 为了防止模板导入错误*/
     protected boolean ENABLE_TITLE_CHECK = true;
-    /*如果标题检查出现失败, 则说明所有都失败, 这是一个性能优化. */
-    protected boolean FORCE_TITLE_CHECK_FAIL = false;
+    /*标志位,如果标题检查失败, 这个会置为true */
+    protected boolean TITLE_CHECK_FAIL_FLAG = false;
 
     public SheetReaderContext(int sheetIndex, Supplier newObjectSupplier) {
         this.sheetIndex = sheetIndex;
