@@ -3,12 +3,15 @@ package cn.creekmoon.excelUtils.example;
 import cn.creekmoon.excelUtils.converter.DateConverter;
 import cn.creekmoon.excelUtils.converter.IntegerConverter;
 import cn.creekmoon.excelUtils.converter.LocalDateTimeConverter;
+import cn.creekmoon.excelUtils.core.ExcelConstants;
 import cn.creekmoon.excelUtils.core.ExcelExport;
 import cn.creekmoon.excelUtils.core.ExcelImport;
 import cn.creekmoon.excelUtils.core.PathFinder;
 import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.io.file.PathUtil;
+import cn.hutool.core.io.resource.ResourceUtil;
+import cn.hutool.core.util.ReflectUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,12 +26,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
-import java.io.BufferedInputStream;
+import java.io.InputStream;
 import java.net.URI;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -51,23 +50,21 @@ class ExcelImportTest {
     public void exportTest() throws Exception {
         AtomicInteger count = new AtomicInteger(0);
         int targetCount = 600;
-        //构造请求
+        /*调用导出Controller*/
         ResultActions resultActions = this.mvc.perform(MockMvcRequestBuilders
-                .get(URI.create("/exportExcel"))
+                .get(URI.create("/exampleTest"))
                 .queryParam("size", String.valueOf(targetCount)));
+
+        /*断言导出结果*/
         resultActions.andReturn().getResponse().setCharacterEncoding("UTF-8");
-        resultActions
-                .andExpect(MockMvcResultMatchers.status().isOk())
+        resultActions.andExpect(MockMvcResultMatchers.status().isOk())
                 .andDo(x -> {
                     MockMultipartFile mockFile = new MockMultipartFile("mockFile", x.getResponse().getContentAsByteArray());
-                    ExcelImport<Student> read = ExcelImport.create(mockFile, Student::new)
-                            .addConvert("用户名", Student::setUserName)
-                            .addConvert("全名", Student::setFullName)
+                    ExcelImport.create(mockFile, Student::new)
                             .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                             .addConvert("邮箱", Student::setEmail)
-                            .addConvert("生日", DateConverter::parse, Student::setBirthday)
-                            .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
                             .read(data -> {
+                                log.info("[测试导出] Object={}", data);
                                 count.incrementAndGet();
                             });
                 });
@@ -79,56 +76,51 @@ class ExcelImportTest {
 
     @Test
     public void importTest() throws Exception {
-        //构建一个Excel 并获取文件对象
-        List<Student> students = Arrays.asList(
-                Student.builder().fullName("first_full_name").age(1).build(),
-                Student.builder().fullName("second_full_name").age(2).build());
-        String taskId = ExcelExport.create("test", Student.class)
-                .addTitle("全名", Student::getFullName)
-                .addTitle("年龄", Student::getAge)
-                .addTitle("生日", Student::getBirthday)
-                .write(students)
-                .stopWrite();
-        Assertions.assertNotNull(taskId);
-        BufferedInputStream inputStream = FileUtil.getInputStream(PathFinder.getAbsoluteFilePath(taskId));
-        Assertions.assertNotNull(inputStream);
+        /*读取导入文件*/
+        String IMPORT_FILE_NAME = "import-demo-1000.xlsx";
+        InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
+        MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
 
-        //读取excel
-        MockMultipartFile testExcel = new MockMultipartFile("test", inputStream);
-        List<Student> result = ExcelImport.create(testExcel, Student::new)
-                .addConvertAndMustExist("全名", Student::setFullName)
-                .addConvertAndSkipEmpty("年龄", IntegerConverter::parse, Student::setAge)
-                .addConvertAndSkipEmpty("生日", DateConverter::parse, Student::setBirthday)
-                .readAll(ExcelImport.ConvertStrategy.SKIP_ALL_IF_FAIL);
 
-        Assertions.assertEquals(result.size(), 2);
-        CleanTempFilesExecutor.cleanTeamFileNow(taskId);
-        Assertions.assertFalse(FileUtil.exist(PathFinder.getAbsoluteFilePath(taskId)));
+        /*计数器*/
+        AtomicInteger count = new AtomicInteger();
 
-    }
+        /*第一个sheet导入测试*/
+        ExcelImport read = ExcelImport.create(mockMultipartFile)
+                .switchSheet(0, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .read(false, student -> {
+                    log.info("[测试导入] object={}", student);
+                    count.getAndIncrement();
+                });
+        Assertions.assertEquals(1000, count.get());
 
-    private Student createNewStudent() {
-        Student student = new Student();
-        //随机年龄
-        student.setAge(RandomUtil.randomInt(1, 100));
-        student.setBirthday(new Date());
-        //随机生成邮箱
-        student.setEmail(RandomUtil.randomString(10) + "@qq.com");
-        //随机生成时间
-        student.setExpTime(LocalDateTime.now());
-        student.setFullName(RandomUtil.randomString(5));
-        student.setUserName(RandomUtil.randomString(5));
-        student.setBirthday(new Date());
-        return student;
-    }
-
-    private ArrayList<Student> createStudentList(int size) {
-        ArrayList<Student> result = new ArrayList<>();
-        //加入数据 六十万
-        for (int i = 0; i < size; i++) {
-            result.add(createNewStudent());
+        /*第二个sheet导入测试*/
+        List<Student> students = read.switchSheet(1, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .readAll();
+        Assertions.assertEquals(4, students.size());
+        for (Student student : students) {
+            read.setResult(student, ExcelConstants.IMPORT_SUCCESS_MSG);
         }
-        return result;
-    }
 
+        /*检查导出结果是否按照预期生成*/
+        ExcelExport excelExport = (ExcelExport) ReflectUtil.getFieldValue(read, "excelExport");
+        Assertions.assertFalse(FileUtil.exist(PathFinder.getAbsoluteFilePath(excelExport.taskId)));
+        read.generateResultFile();
+        Assertions.assertTrue(FileUtil.exist(PathFinder.getAbsoluteFilePath(excelExport.taskId)));
+        CleanTempFilesExecutor.cleanTempFileNow(excelExport.taskId);
+        Assertions.assertFalse(FileUtil.exist(PathFinder.getAbsoluteFilePath(excelExport.taskId)));
+
+    }
 }

@@ -1,6 +1,7 @@
 package cn.creekmoon.excelUtils.converter;
 
-import cn.creekmoon.excelUtils.hutool589.core.date.LocalDateTimeUtil;
+import cn.creekmoon.excelUtils.exception.CheckedExcelException;
+import cn.hutool.core.date.LocalDateTimeUtil;
 
 import java.time.LocalDateTime;
 
@@ -10,7 +11,7 @@ import java.time.LocalDateTime;
 public class LocalDateTimeConverter {
 
 
-    public static LocalDateTime parse(String str) {
+    public static LocalDateTime parse(String str) throws CheckedExcelException {
         return LocalDateTimeUtil.of(DateConverter.parse(str));
     }
 }

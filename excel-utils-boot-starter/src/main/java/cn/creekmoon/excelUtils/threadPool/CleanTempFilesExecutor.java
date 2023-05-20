@@ -2,7 +2,7 @@ package cn.creekmoon.excelUtils.threadPool;
 
 import cn.creekmoon.excelUtils.config.ExcelUtilsConfig;
 import cn.creekmoon.excelUtils.core.PathFinder;
-import cn.creekmoon.excelUtils.hutool589.core.io.FileUtil;
+import cn.hutool.core.io.FileUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
@@ -40,7 +40,7 @@ public class CleanTempFilesExecutor {
      * @throws IOException
      */
     public static void cleanTempFileDelay(String taskId) {
-        cleanTempFileDelay(taskId, null);
+        cleanTempFileDelay(taskId, ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES);
     }
 
     /**
@@ -51,18 +51,24 @@ public class CleanTempFilesExecutor {
      */
     public static void cleanTempFileDelay(String taskId, Integer fileLifeMinutes) {
         threadPoolExecutor.schedule(() -> {
-            cleanTeamFileNow(taskId);
+            cleanTempFileNow(taskId);
         }, fileLifeMinutes != null ? fileLifeMinutes : ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES, TimeUnit.MINUTES);
     }
 
-    public static void cleanTeamFileNow(String taskId) {
+
+    public static void cleanTempFileNow(String taskId) {
+        cleanTempFileByPathNow(PathFinder.getAbsoluteFilePath(taskId));
+    }
+
+
+    public static void cleanTempFileByPathNow(String filePath) {
         try {
-            if (!FileUtil.del(PathFinder.getAbsoluteFilePath(taskId))) {
-                log.warn("[Excel导出]清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(taskId));
+            if (!FileUtil.del(filePath)) {
+                log.warn("清理临时文件失败! 路径:" + filePath);
             }
-            log.debug("[Excel导出]清理临时文件成功!路径:" + PathFinder.getAbsoluteFilePath(taskId));
+            log.debug("清理临时文件成功!路径:" + filePath);
         } catch (Exception e) {
-            log.warn("[Excel导出]清理临时文件失败! 路径:" + PathFinder.getAbsoluteFilePath(taskId));
+            log.warn("清理临时文件失败! 路径:" + filePath);
         }
     }
 }

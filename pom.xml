@@ -8,7 +8,7 @@
     <name>excel-utils-parent</name>
     <artifactId>excel-utils-parent</artifactId>
     <packaging>pom</packaging>
-    <version>1.1.11</version>
+    <version>1.2.2</version>
     <modules>
         <module>excel-utils-boot-starter</module>
         <!--<module>excel-utils-example</module>-->
@@ -95,12 +95,16 @@
                 <artifactId>excel-utils-boot-starter</artifactId>
                 <version>${current.version}</version>
             </dependency>
-
+            <dependency>
+                <groupId>cn.hutool</groupId>
+                <artifactId>hutool-all</artifactId>
+                <version>${hutool-all.version}</version>
+            </dependency>
 
         </dependencies>
     </dependencyManagement>
     <properties>
-        <current.version>1.1.11</current.version>
+        <current.version>1.2.2</current.version>
         <jackson.version>2.12.6</jackson.version>
         <swagger.version>2.8.0</swagger.version>
         <knife4j.version>2.0.9</knife4j.version>
@@ -110,6 +114,7 @@
         <poi.version>4.1.2</poi.version>
         <xercesImpl.version>2.11.0</xercesImpl.version>
         <commons-compress.version>1.21</commons-compress.version>
+        <hutool-all.version>5.8.18</hutool-all.version>
     </properties>
 
 

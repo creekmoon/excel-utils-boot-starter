@@ -5,7 +5,14 @@ package cn.creekmoon.excelUtils.core;
  * @date 2022/1/11
  */
 @FunctionalInterface
-public interface ExConsumer<T>{
+public interface ExConsumer<T> {
 
     void accept(T t) throws Exception;
+
+    public static final ExConsumer EMPTY = o -> {
+    };
+
+    public static ExConsumer empty() {
+        return EMPTY;
+    }
 }
