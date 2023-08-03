@@ -622,6 +622,14 @@ public class ExcelExport<R> {
         }
     }
 
+    /**
+     * 统计当前的标题数量
+     *
+     * @return
+     */
+    public int countTitles() {
+        return titles.size();
+    }
 
     /**
      * 切换到新的标签页
