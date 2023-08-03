@@ -34,6 +34,12 @@ public class SheetWriter<R> {
         return this;
     }
 
+    /**
+     * 获取当前的表头数量
+     */
+    public int countTitles() {
+        return sheetWriterContext.titles.size();
+    }
 
     /**
      * 为当前列设置一个样式

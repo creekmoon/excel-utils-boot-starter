@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.github.creekmoon</groupId>
         <artifactId>excel-utils-parent</artifactId>
-        <version>1.2.4</version>
+        <version>1.2.5</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
