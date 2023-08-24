@@ -3,13 +3,9 @@ package cn.creekmoon.excelUtils.example;
 import cn.creekmoon.excelUtils.converter.DateConverter;
 import cn.creekmoon.excelUtils.converter.IntegerConverter;
 import cn.creekmoon.excelUtils.converter.LocalDateTimeConverter;
-import cn.creekmoon.excelUtils.core.ExcelConstants;
-import cn.creekmoon.excelUtils.core.ExcelExport;
-import cn.creekmoon.excelUtils.core.ExcelImport;
-import cn.creekmoon.excelUtils.core.PathFinder;
+import cn.creekmoon.excelUtils.core.*;
 import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.io.file.PathUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.ReflectUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +26,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 @AutoConfigureMockMvc
 @SpringBootTest
@@ -121,6 +118,40 @@ class ExcelImportTest {
         Assertions.assertTrue(FileUtil.exist(PathFinder.getAbsoluteFilePath(excelExport.taskId)));
         CleanTempFilesExecutor.cleanTempFileNow(excelExport.taskId);
         Assertions.assertFalse(FileUtil.exist(PathFinder.getAbsoluteFilePath(excelExport.taskId)));
+
+    }
+
+    @Test
+    public void importTest2() throws Exception {
+        /*读取导入文件*/
+        String IMPORT_FILE_NAME = "import-demo-cell-read.xlsx";
+        InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
+        MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
+
+
+        /*导入测试*/
+        AtomicReference<String> B1_RESULT = new AtomicReference<String>(null);
+        AtomicReference<String> D1_RESULT = new AtomicReference<String>(null);
+        ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
+        SheetReader<Student> studentSheetReader = excelImport
+                .switchSheet(0, Student::new)
+                .addSingleCellReader("B1", B1_RESULT::set)
+                .addSingleCellReader("D1", D1_RESULT::set)
+                .indexConfig(1)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
+        List<Student> students = studentSheetReader.readAll();
+
+
+        /*检查导出结果是否按照预期生成*/
+        Assertions.assertEquals(students.size(), 4);
+        Assertions.assertEquals(excelImport.getErrorCount().get(), 0);
+        Assertions.assertEquals(B1_RESULT.get(), "李二狗");
+        Assertions.assertEquals(D1_RESULT.get(), "李云龙");
 
     }
 }

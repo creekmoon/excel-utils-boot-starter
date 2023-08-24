@@ -2,16 +2,30 @@ package cn.creekmoon.excelUtils.core;
 
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class SheetReaderContext {
     /**
-     * 标题行号 这里是0,意味着第一行是标题, 第二行才是数据
+     * 标题行号 这里是0,意味着第一行是标题
      */
     public int titleRowIndex = 0;
 
+    /**
+     * 首行数据行号
+     */
+    public int firstRowIndex = titleRowIndex + 1;
+
+    /**
+     * 末行数据行号
+     */
+    public int latestRowIndex = Integer.MAX_VALUE;
+
     public int sheetIndex;
     public Supplier newObjectSupplier;
+
+    /* key=rowIndex  value=<colIndex,Consumer> 单元格消费者*/
+    protected LinkedHashMap<Integer, HashMap<Integer, Consumer<String>>> singleCellConsumers = new LinkedHashMap(32);
 
     /* key=title  value=执行器 */
     protected LinkedHashMap<String, ExFunction> title2converts = new LinkedHashMap(32);

@@ -79,18 +79,18 @@ public class ExcelImport {
     /**
      * 切换读取的sheet页
      *
-     * @param sheetIndex 下标,从0开始
-     * @param supplier
+     * @param sheetIndex      下标,从0开始
+     * @param rowDataSupplier 按行读取时,每行数据的实例化对象构造函数
      * @param <T>
      * @return
      */
-    public <T> SheetReader<T> switchSheet(int sheetIndex, Supplier<T> supplier) {
+    public <T> SheetReader<T> switchSheet(int sheetIndex, Supplier<T> rowDataSupplier) {
         SheetReader sheetReader = this.sheetIndex2SheetReader.get(sheetIndex);
         if (sheetReader != null) {
             return sheetReader;
         }
 
-        SheetReaderContext context = new SheetReaderContext(sheetIndex, supplier);
+        SheetReaderContext context = new SheetReaderContext(sheetIndex, rowDataSupplier);
 
         SheetReader<T> reader = new SheetReader<>();
         reader.sheetReaderContext = context;
@@ -138,8 +138,9 @@ public class ExcelImport {
     }
 
 
-    public void response(HttpServletResponse response) throws IOException {
+    public ExcelImport response(HttpServletResponse response) throws IOException {
         ExcelExport.response(generateResultFile(), excelExport.excelName, response);
+        return this;
     }
 
     /**

@@ -6,6 +6,7 @@ import cn.creekmoon.excelUtils.converter.LocalDateTimeConverter;
 import cn.creekmoon.excelUtils.core.AsyncTaskState;
 import cn.creekmoon.excelUtils.core.ExcelExport;
 import cn.creekmoon.excelUtils.core.ExcelImport;
+import cn.creekmoon.excelUtils.core.SheetReader;
 import cn.creekmoon.excelUtils.example.config.exception.MyNewException;
 import cn.hutool.core.util.RandomUtil;
 import io.swagger.annotations.Api;
@@ -112,8 +113,7 @@ public class ExampleController {
     public void importExcelBySax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
-        ExcelImport excelImport = ExcelImport.create(file);
-        excelImport
+        ExcelImport excelImport = ExcelImport.create(file)
                 .switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
@@ -134,53 +134,47 @@ public class ExampleController {
         long end = System.currentTimeMillis();
         System.out.println("执行时间:" + (end - start));
     }
-//
-//    /**
-//     * 导入
-//     *
-//     * @param request
-//     * @param response
-//     * @throws IOException
-//     */
-//    @PostMapping(value = "/importExcelByMemory")
-//    @ApiOperation("同步导入数据(读全部, 底层是内存模式)")
-//    public void importExcelByMemory(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
-//        ExcelImport studentExcelImport = ExcelImport.create(file);
-//        studentExcelImport
-//                .switchSheet(0, Student::new)
-//                .addConvert("用户名", Student::setUserName)
-//                .addConvert("全名", Student::setFullName)
-//                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
-//                .addConvert("邮箱", Student::setEmail)
-//                .addConvert("生日", DateConverter::parse, Student::setBirthday)
-//                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-//                .convertPostProcessor(x -> {
-//                    if (x.age > 50) {
-//                        throw new MyNewException("错误!年龄不能大于五十");
-//                    }
-//                })
-////                .readAll()
-////                .forEach
-//                .read(student -> {
-//                    studentExcelImport.setResult(student, ExcelConstants.IMPORT_SUCCESS_MSG);
-//                });
-//
-//        studentExcelImport
-//                .switchSheet(1, Student::new)
-//                .addConvert("用户名", Student::setUserName)
-//                .addConvert("全名", Student::setFullName)
-//                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
-//                .addConvert("邮箱", Student::setEmail)
-//                .addConvert("生日", DateConverter::parse, Student::setBirthday)
-//                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-//                .read( student -> {
-//                    //todo 执行一些业务操作
-//                    throw new MyNewException("ERROR! XIEXIE");
-//                });
-//
-//        //响应导出结果
-//        studentExcelImport.response(response);
-//    }
+
+
+    /**
+     * 导入
+     *
+     * @param request
+     * @param response
+     * @throws IOException
+     */
+    @PostMapping(value = "/importExcelByCell")
+    @ApiOperation("导入数据(读取指定单元格)")
+    public void importExcelByCell(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+
+        ExcelImport excelImport = ExcelImport.create(file);
+        SheetReader<Student> studentSheetReader = excelImport
+                .switchSheet(0, Student::new)
+                //读取指定单元格
+                .addSingleCellReader("B1", x -> System.out.println("读取到B1单元格:" + x))
+                .addSingleCellReader("D1", x -> System.out.println("读取到D1单元格:" + x))
+                .addSingleCellReader("C5", x -> System.out.println("读取到C5单元格:" + x))
+                .addSingleCellReader("E6", x -> System.out.println("读取到E6单元格:" + x))
+                //从第二行开始,正常读取列
+                .indexConfig(1)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
+
+
+        long count = studentSheetReader
+                .readAll()
+                .stream()
+                .peek(student -> studentSheetReader.setResult(student, "读取完毕"))
+                .count();
+
+        System.out.println("读取到students数量:" + count);
+        studentSheetReader.response(response);
+    }
+
 
     private Student createNewStudent() {
         Student student = new Student();

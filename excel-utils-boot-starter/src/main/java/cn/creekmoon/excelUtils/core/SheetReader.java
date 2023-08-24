@@ -3,6 +3,7 @@ package cn.creekmoon.excelUtils.core;
 import cn.creekmoon.excelUtils.converter.StringConverter;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
+import cn.creekmoon.excelUtils.util.ExcelUtils;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
@@ -15,6 +16,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static cn.creekmoon.excelUtils.core.ExcelConstants.*;
 
@@ -33,8 +35,36 @@ public class SheetReader<R> {
         return this;
     }
 
-    public SheetReader<R> addConvert(String title, BiConsumer<R, String> setter) {
-        addConvert(title, x -> x, setter);
+    /**
+     * 添加单个单元格的转换器
+     *
+     * @param colIndex 列下标(从0开始)
+     * @param rowIndex 行下标(从0开始)
+     * @param setter   消费者
+     * @return
+     */
+    public SheetReader<R> addSingleCellReader(int colIndex, int rowIndex, Consumer<String> setter) {
+        sheetReaderContext.singleCellConsumers.computeIfAbsent(rowIndex, HashMap::new);
+        sheetReaderContext.singleCellConsumers.get(rowIndex).put(colIndex, setter);
+        return this;
+    }
+
+    /**
+     * 添加单个单元格的转换器
+     *
+     * @param cellReference 单元格引用(A1,B1,C1...)
+     * @param reader        消费者
+     * @return
+     */
+    public SheetReader<R> addSingleCellReader(String cellReference, Consumer<String> reader) {
+        int colIndex = ExcelUtils.excelCellToColumnNumber(cellReference) - 1;
+        int rowIndex = ExcelUtils.excelCellToRowNumber(cellReference) - 1;
+        return addSingleCellReader(colIndex, rowIndex, reader);
+    }
+
+
+    public SheetReader<R> addConvert(String title, BiConsumer<R, String> reader) {
+        addConvert(title, x -> x, reader);
         return this;
     }
 
@@ -175,7 +205,6 @@ public class SheetReader<R> {
             excel07SaxReader.read(this.parent.file.getInputStream(), -1);
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常", e);
-            e.printStackTrace();
             ExcelExport.cleanTempFileDelay(parent.excelExport.stopWrite());
         } finally {
             /*释放信号量*/
@@ -186,6 +215,41 @@ public class SheetReader<R> {
         return CONVERT_FAIL.get() ? Collections.emptyList() : convertObjectList;
     }
 
+
+    /**
+     * 增加读取范围限制
+     *
+     * @param titleRowIndex  标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param latestRowIndex 最后一条数据所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @return
+     */
+    public SheetReader<R> indexConfig(int titleRowIndex, int firstRowIndex, int latestRowIndex) {
+        this.sheetReaderContext.titleRowIndex = titleRowIndex;
+        this.sheetReaderContext.firstRowIndex = firstRowIndex;
+        this.sheetReaderContext.latestRowIndex = latestRowIndex;
+        return this;
+    }
+
+    /**
+     * 增加读取范围限制
+     *
+     * @param titleRowIndex  标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param latestRowIndex 最后一条数据所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @return
+     */
+    public SheetReader<R> indexConfig(int titleRowIndex, int latestRowIndex) {
+        return indexConfig(titleRowIndex, titleRowIndex + 1, latestRowIndex);
+    }
+
+    /**
+     * 增加读取范围限制
+     *
+     * @param titleRowIndex 标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @return
+     */
+    public SheetReader<R> indexConfig(int titleRowIndex) {
+        return indexConfig(titleRowIndex, titleRowIndex + 1, Integer.MAX_VALUE);
+    }
 
     /**
      * 行转换
@@ -267,6 +331,17 @@ public class SheetReader<R> {
                 if (targetSheetIndex != sheetIndex) {
                     return;
                 }
+
+                /*解析单个单元格*/
+                if (sheetReaderContext.singleCellConsumers.size() > 0
+                        && sheetReaderContext.singleCellConsumers.containsKey((int) rowIndex)
+                ) {
+                    sheetReaderContext
+                            .singleCellConsumers
+                            .get((int) rowIndex).
+                            forEach((colIndex, consumer)
+                                    -> consumer.accept(StringConverter.parse(rowList.get(colIndex))));
+                }
                 /*读取标题*/
                 if (rowIndex == sheetReaderContext.titleRowIndex) {
                     for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
@@ -274,10 +349,19 @@ public class SheetReader<R> {
                     }
                     return;
                 }
-                /*只读取第一个sheet的数据 只读取标题行之后的数据 */
-                if (rowIndex <= sheetReaderContext.titleRowIndex) {
+                /*只读取指定范围的数据 */
+                if (rowIndex == (int) sheetReaderContext.titleRowIndex
+                        || rowIndex < sheetReaderContext.firstRowIndex
+                        || rowIndex > sheetReaderContext.latestRowIndex) {
                     return;
                 }
+                /*没有添加 convert直接跳过 */
+                if (sheetReaderContext.title2converts.isEmpty()
+                        && sheetReaderContext.title2consumers.isEmpty()
+                ) {
+                    return;
+                }
+
                 /*Excel解析原生的数据*/
                 HashMap<String, Object> rowData = new LinkedHashMap<>();
                 for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
@@ -334,8 +418,8 @@ public class SheetReader<R> {
     }
 
 
-    public void response(HttpServletResponse response) throws IOException {
-        parent.response(response);
+    public ExcelImport response(HttpServletResponse response) throws IOException {
+        return parent.response(response);
     }
 
     /**
