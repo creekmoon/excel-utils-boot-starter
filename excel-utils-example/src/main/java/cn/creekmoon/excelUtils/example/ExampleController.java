@@ -3,11 +3,9 @@ package cn.creekmoon.excelUtils.example;
 import cn.creekmoon.excelUtils.converter.DateConverter;
 import cn.creekmoon.excelUtils.converter.IntegerConverter;
 import cn.creekmoon.excelUtils.converter.LocalDateTimeConverter;
-import cn.creekmoon.excelUtils.core.AsyncTaskState;
-import cn.creekmoon.excelUtils.core.ExcelExport;
-import cn.creekmoon.excelUtils.core.ExcelImport;
-import cn.creekmoon.excelUtils.core.SheetReader;
+import cn.creekmoon.excelUtils.core.*;
 import cn.creekmoon.excelUtils.example.config.exception.MyNewException;
+import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.hutool.core.util.RandomUtil;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -110,7 +108,7 @@ public class ExampleController {
      */
     @PostMapping(value = "/importExcel")
     @ApiOperation("导入数据")
-    public void importExcelBySax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void importExcelBySax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException, CheckedExcelException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
         ExcelImport excelImport = ExcelImport.create(file)
@@ -133,6 +131,19 @@ public class ExampleController {
         //判断这个方法的执行时间
         long end = System.currentTimeMillis();
         System.out.println("执行时间:" + (end - start));
+
+        CellReader<Student> studentCellReader = excelImport.switchSheetAndUseCellReader(0, Student::new);
+        studentCellReader.addConvert("A1", Student::setUserName)
+                .addConvert("B1", Student::setFullName)
+                .addConvert("A2", x -> {
+                    return x;
+                }, Student::setEmail)
+                .read(student -> {
+                    if (System.currentTimeMillis() % 2 >= 0) {
+                        throw new MyNewException("消费失败");
+                    }
+                    System.out.println("CELL读取到的对象:" + student);
+                });
     }
 
 
@@ -150,13 +161,8 @@ public class ExampleController {
         ExcelImport excelImport = ExcelImport.create(file);
         SheetReader<Student> studentSheetReader = excelImport
                 .switchSheet(0, Student::new)
-                //读取指定单元格
-                .addSingleCellReader("B1", x -> System.out.println("读取到B1单元格:" + x))
-                .addSingleCellReader("D1", x -> System.out.println("读取到D1单元格:" + x))
-                .addSingleCellReader("C5", x -> System.out.println("读取到C5单元格:" + x))
-                .addSingleCellReader("E6", x -> System.out.println("读取到E6单元格:" + x))
                 //从第二行开始,正常读取列
-                .indexConfig(1)
+                .range(1)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)

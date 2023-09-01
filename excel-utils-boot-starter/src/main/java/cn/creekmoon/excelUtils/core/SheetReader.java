@@ -3,7 +3,6 @@ package cn.creekmoon.excelUtils.core;
 import cn.creekmoon.excelUtils.converter.StringConverter;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
-import cn.creekmoon.excelUtils.util.ExcelUtils;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
@@ -16,7 +15,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import static cn.creekmoon.excelUtils.core.ExcelConstants.*;
 
@@ -33,33 +31,6 @@ public class SheetReader<R> {
         sheetReaderContext.title2converts.put(title, convert);
         sheetReaderContext.title2consumers.put(title, setter);
         return this;
-    }
-
-    /**
-     * 添加单个单元格的转换器
-     *
-     * @param colIndex 列下标(从0开始)
-     * @param rowIndex 行下标(从0开始)
-     * @param setter   消费者
-     * @return
-     */
-    public SheetReader<R> addSingleCellReader(int colIndex, int rowIndex, Consumer<String> setter) {
-        sheetReaderContext.singleCellConsumers.computeIfAbsent(rowIndex, HashMap::new);
-        sheetReaderContext.singleCellConsumers.get(rowIndex).put(colIndex, setter);
-        return this;
-    }
-
-    /**
-     * 添加单个单元格的转换器
-     *
-     * @param cellReference 单元格引用(A1,B1,C1...)
-     * @param reader        消费者
-     * @return
-     */
-    public SheetReader<R> addSingleCellReader(String cellReference, Consumer<String> reader) {
-        int colIndex = ExcelUtils.excelCellToColumnNumber(cellReference) - 1;
-        int rowIndex = ExcelUtils.excelCellToRowNumber(cellReference) - 1;
-        return addSingleCellReader(colIndex, rowIndex, reader);
     }
 
 
@@ -219,36 +190,36 @@ public class SheetReader<R> {
     /**
      * 增加读取范围限制
      *
-     * @param titleRowIndex  标题所在的行数(下标按照从0开始, 如果是第一行则填0)
-     * @param latestRowIndex 最后一条数据所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param titleRowIndex    标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param lastDataRowIndex 最后一条数据所在的行数(下标按照从0开始, 如果是第一行则填0)
      * @return
      */
-    public SheetReader<R> indexConfig(int titleRowIndex, int firstRowIndex, int latestRowIndex) {
+    public SheetReader<R> range(int titleRowIndex, int firstDataRowIndex, int lastDataRowIndex) {
         this.sheetReaderContext.titleRowIndex = titleRowIndex;
-        this.sheetReaderContext.firstRowIndex = firstRowIndex;
-        this.sheetReaderContext.latestRowIndex = latestRowIndex;
+        this.sheetReaderContext.firstRowIndex = firstDataRowIndex;
+        this.sheetReaderContext.latestRowIndex = lastDataRowIndex;
         return this;
     }
 
     /**
      * 增加读取范围限制
      *
-     * @param titleRowIndex  标题所在的行数(下标按照从0开始, 如果是第一行则填0)
-     * @param latestRowIndex 最后一条数据所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param startRowIndex 标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param lastRowIndex  最后一条数据所在的行数(下标按照从0开始, 如果是第一行则填0)
      * @return
      */
-    public SheetReader<R> indexConfig(int titleRowIndex, int latestRowIndex) {
-        return indexConfig(titleRowIndex, titleRowIndex + 1, latestRowIndex);
+    public SheetReader<R> range(int startRowIndex, int lastRowIndex) {
+        return range(startRowIndex, startRowIndex + 1, lastRowIndex);
     }
 
     /**
      * 增加读取范围限制
      *
-     * @param titleRowIndex 标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param startRowIndex 起始行下标(从0开始)
      * @return
      */
-    public SheetReader<R> indexConfig(int titleRowIndex) {
-        return indexConfig(titleRowIndex, titleRowIndex + 1, Integer.MAX_VALUE);
+    public SheetReader<R> range(int startRowIndex) {
+        return range(startRowIndex, startRowIndex + 1, Integer.MAX_VALUE);
     }
 
     /**
@@ -332,16 +303,6 @@ public class SheetReader<R> {
                     return;
                 }
 
-                /*解析单个单元格*/
-                if (sheetReaderContext.singleCellConsumers.size() > 0
-                        && sheetReaderContext.singleCellConsumers.containsKey((int) rowIndex)
-                ) {
-                    sheetReaderContext
-                            .singleCellConsumers
-                            .get((int) rowIndex).
-                            forEach((colIndex, consumer)
-                                    -> consumer.accept(StringConverter.parse(rowList.get(colIndex))));
-                }
                 /*读取标题*/
                 if (rowIndex == sheetReaderContext.titleRowIndex) {
                     for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {

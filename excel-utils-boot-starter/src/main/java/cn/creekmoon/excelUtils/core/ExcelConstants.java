@@ -14,7 +14,7 @@ public class ExcelConstants {
     public static final String CONVERT_SUCCESS_MSG = "验证通过!";
     public static final String CONVERT_FAIL_MSG = "字段[{}]解析失败！";
 
-    public static final String FIELD_LACK_MSG = "字段[{}]为必填项! 请检查格式！";
+    public static final String FIELD_LACK_MSG = "字段[{}]为必填项! ";
 
     public static final String TITLE_CHECK_ERROR = "导入的模板有误,请检查您的文件!";
 

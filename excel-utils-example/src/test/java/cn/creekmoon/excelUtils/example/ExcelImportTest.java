@@ -8,6 +8,7 @@ import cn.creekmoon.excelUtils.threadPool.CleanTempFilesExecutor;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.ReflectUtil;
+import cn.hutool.core.util.StrUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,9 +25,9 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import java.io.InputStream;
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 @AutoConfigureMockMvc
 @SpringBootTest
@@ -42,9 +43,13 @@ class ExcelImportTest {
         session = new MockHttpSession();
     }
 
-
+    /**
+     * 测试Response方法
+     *
+     * @throws Exception
+     */
     @Test
-    public void exportTest() throws Exception {
+    public void controllerResponseTest() throws Exception {
         AtomicInteger count = new AtomicInteger(0);
         int targetCount = 600;
         /*调用导出Controller*/
@@ -71,8 +76,13 @@ class ExcelImportTest {
     }
 
 
+    /**
+     * 测试临时文件清理
+     *
+     * @throws Exception
+     */
     @Test
-    public void importTest() throws Exception {
+    public void tempFileTest() throws Exception {
         /*读取导入文件*/
         String IMPORT_FILE_NAME = "import-demo-1000.xlsx";
         InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
@@ -111,7 +121,7 @@ class ExcelImportTest {
             read.setResult(student, ExcelConstants.IMPORT_SUCCESS_MSG);
         }
 
-        /*检查导出结果是否按照预期生成*/
+        //检查临时文件是否能够正常生成和清理
         ExcelExport excelExport = (ExcelExport) ReflectUtil.getFieldValue(read, "excelExport");
         Assertions.assertFalse(FileUtil.exist(PathFinder.getAbsoluteFilePath(excelExport.taskId)));
         read.generateResultFile();
@@ -121,23 +131,24 @@ class ExcelImportTest {
 
     }
 
+
+    /**
+     * 测试读取指定范围
+     *
+     * @throws Exception
+     */
     @Test
-    public void importTest2() throws Exception {
+    public void rangeTest() throws Exception {
         /*读取导入文件*/
-        String IMPORT_FILE_NAME = "import-demo-cell-read.xlsx";
+        String IMPORT_FILE_NAME = "import-demo-1000.xlsx";
         InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
         MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
 
-
         /*导入测试*/
-        AtomicReference<String> B1_RESULT = new AtomicReference<String>(null);
-        AtomicReference<String> D1_RESULT = new AtomicReference<String>(null);
         ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
         SheetReader<Student> studentSheetReader = excelImport
                 .switchSheet(0, Student::new)
-                .addSingleCellReader("B1", B1_RESULT::set)
-                .addSingleCellReader("D1", D1_RESULT::set)
-                .indexConfig(1)
+                .range(0, 3, 4)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
@@ -147,11 +158,55 @@ class ExcelImportTest {
         List<Student> students = studentSheetReader.readAll();
 
 
-        /*检查导出结果是否按照预期生成*/
-        Assertions.assertEquals(students.size(), 4);
-        Assertions.assertEquals(excelImport.getErrorCount().get(), 0);
-        Assertions.assertEquals(B1_RESULT.get(), "李二狗");
-        Assertions.assertEquals(D1_RESULT.get(), "李云龙");
+        /*检查是否能够正确读取*/
+        Assertions.assertEquals(students.size(), 2);
+    }
+
+
+    /**
+     * 单元格默认读取
+     *
+     * @throws Exception
+     */
+    @Test
+    public void cellReadTest() throws Exception {
+        /*读取导入文件*/
+        String IMPORT_FILE_NAME = "import-demo-cell-read.xlsx";
+        InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
+        MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
+
+
+        ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
+        // 按index和 按单元格名称读取测试
+        Student sheet1 = excelImport
+                .switchSheetAndUseCellReader(0, Student::new)
+                .addConvert("B1", Student::setUserName)
+                .addConvert("D1", Student::setFullName)
+                .addConvert(0, 5, IntegerConverter::parse, Student::setAge)
+                .read();
+        Assertions.assertEquals(sheet1.getUserName(), "李二狗");
+        Assertions.assertEquals(sheet1.getFullName(), "李云龙");
+        Assertions.assertEquals(sheet1.getAge(), 2000);
+
+
+        // 读取合并单元格测试
+        excelImport
+                .switchSheetAndUseCellReader(1, HashMap::new)
+                .addConvert("A1", (x, y) -> x.put("A1", y))
+                .addConvert("E1", (x, y) -> x.put("E1", y))
+                .addConvert("A4", (x, y) -> x.put("A4", y))
+                .addConvert("F1", (x, y) -> x.put("F1", y))
+                .addConvert("A5", (x, y) -> x.put("A5", y))
+                .addConvert("E3", (x, y) -> x.put("E3", y))
+                .read(x -> {
+                    Assertions.assertEquals(x.get("A1"), "合并单元格(A1)");
+                    Assertions.assertEquals(x.get("E1"), "合并单元格(E1)");
+                    Assertions.assertTrue(StrUtil.isBlank((String) x.get("A4")));
+                    Assertions.assertTrue(StrUtil.isBlank((String) x.get("F1")));
+                    Assertions.assertEquals(x.get("A5"), "合并单元格(A5)");
+                    Assertions.assertEquals(x.get("E3"), "合并单元格(E3)");
+                    System.out.println("测试通过 x = " + x);
+                });
 
     }
 }

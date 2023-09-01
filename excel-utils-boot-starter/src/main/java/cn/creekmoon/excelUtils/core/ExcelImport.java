@@ -79,18 +79,34 @@ public class ExcelImport {
     /**
      * 切换读取的sheet页
      *
-     * @param sheetIndex      下标,从0开始
-     * @param rowDataSupplier 按行读取时,每行数据的实例化对象构造函数
+     * @param sheetIndex 下标,从0开始
+     * @param supplier   按行读取时,每行数据的实例化对象构造函数
      * @param <T>
      * @return
      */
-    public <T> SheetReader<T> switchSheet(int sheetIndex, Supplier<T> rowDataSupplier) {
+    public <T> CellReader<T> switchSheetAndUseCellReader(int sheetIndex, Supplier<T> supplier) {
+        CellReader<T> reader = new CellReader<>();
+        reader.sheetReaderContext = new SheetReaderContext(sheetIndex, supplier);
+        ;
+        reader.parent = this;
+        return reader;
+    }
+
+    /**
+     * 切换读取的sheet页
+     *
+     * @param sheetIndex 下标,从0开始
+     * @param supplier   按行读取时,每行数据的实例化对象构造函数
+     * @param <T>
+     * @return
+     */
+    public <T> SheetReader<T> switchSheet(int sheetIndex, Supplier<T> supplier) {
         SheetReader sheetReader = this.sheetIndex2SheetReader.get(sheetIndex);
         if (sheetReader != null) {
             return sheetReader;
         }
 
-        SheetReaderContext context = new SheetReaderContext(sheetIndex, rowDataSupplier);
+        SheetReaderContext context = new SheetReaderContext(sheetIndex, supplier);
 
         SheetReader<T> reader = new SheetReader<>();
         reader.sheetReaderContext = context;
