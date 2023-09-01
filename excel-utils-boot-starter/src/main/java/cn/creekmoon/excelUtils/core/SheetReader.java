@@ -3,7 +3,7 @@ package cn.creekmoon.excelUtils.core;
 import cn.creekmoon.excelUtils.converter.StringConverter;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.creekmoon.excelUtils.exception.GlobalExceptionManager;
-import cn.creekmoon.excelUtils.util.ExcelUtils;
+import cn.creekmoon.excelUtils.util.ExcelCellUtils;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
@@ -57,8 +57,8 @@ public class SheetReader<R> {
      * @return
      */
     public SheetReader<R> addSingleCellReader(String cellReference, Consumer<String> reader) {
-        int colIndex = ExcelUtils.excelCellToColumnNumber(cellReference) - 1;
-        int rowIndex = ExcelUtils.excelCellToRowNumber(cellReference) - 1;
+        int colIndex = ExcelCellUtils.excelCellToColumnIndex(cellReference);
+        int rowIndex = ExcelCellUtils.excelCellToRowIndex(cellReference);
         return addSingleCellReader(colIndex, rowIndex, reader);
     }
 

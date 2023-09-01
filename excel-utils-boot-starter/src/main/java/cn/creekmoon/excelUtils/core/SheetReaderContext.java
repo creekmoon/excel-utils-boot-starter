@@ -23,6 +23,21 @@ public class SheetReaderContext {
 
     public int sheetIndex;
     public Supplier newObjectSupplier;
+    public Object currentNewObject;
+
+    StringBuilder errorReport = new StringBuilder();
+    /*单元格转换后置处理*/
+    protected List<ExConsumer> cellConvertPostProcessors = new ArrayList<>();
+    /* 必填项过滤  key=rowIndex  value=<colIndex> */
+    protected LinkedHashMap<Integer, Set<Integer>> mustExistCells = new LinkedHashMap<>(32);
+    /* 选填项过滤  key=rowIndex  value=<colIndex> */
+    protected LinkedHashMap<Integer, Set<Integer>> skipEmptyCells = new LinkedHashMap<>(32);
+    /* key=rowIndex  value=<colIndex,Consumer> 单元格转换器*/
+    protected LinkedHashMap<Integer, HashMap<Integer, ExFunction>> cell2converts = new LinkedHashMap(32);
+
+    /* key=rowIndex  value=<colIndex,Consumer> 单元格消费者*/
+    protected LinkedHashMap<Integer, HashMap<Integer, BiConsumer>> cell2consumers = new LinkedHashMap(32);
+
 
     /* key=rowIndex  value=<colIndex,Consumer> 单元格消费者*/
     protected LinkedHashMap<Integer, HashMap<Integer, Consumer<String>>> singleCellConsumers = new LinkedHashMap(32);
