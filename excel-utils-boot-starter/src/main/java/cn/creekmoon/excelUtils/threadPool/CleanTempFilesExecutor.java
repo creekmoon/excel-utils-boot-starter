@@ -55,6 +55,16 @@ public class CleanTempFilesExecutor {
         }, fileLifeMinutes != null ? fileLifeMinutes : ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES, TimeUnit.MINUTES);
     }
 
+    public static void cleanTempFileByPathDelay(String filePath) {
+        cleanTempFileByPathDelay(filePath, ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES);
+    }
+
+    public static void cleanTempFileByPathDelay(String filePath, Integer fileLifeMinutes) {
+        threadPoolExecutor.schedule(() -> {
+            cleanTempFileByPathNow(filePath);
+        }, fileLifeMinutes != null ? fileLifeMinutes : ExcelUtilsConfig.TEMP_FILE_LIFE_MINUTES, TimeUnit.MINUTES);
+    }
+
 
     public static void cleanTempFileNow(String taskId) {
         cleanTempFileByPathNow(PathFinder.getAbsoluteFilePath(taskId));
