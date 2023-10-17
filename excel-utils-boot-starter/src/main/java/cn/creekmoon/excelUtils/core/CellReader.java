@@ -57,6 +57,11 @@ public class CellReader<R> {
         return this;
     }
 
+    public CellReader<R> addConvert(int rowIndex, int colIndex, BiConsumer<R, String> setter) {
+        return addConvert(rowIndex, colIndex, x -> x, setter);
+    }
+
+
     public <T> CellReader<R> addConvertAndSkipEmpty(int rowIndex, int colIndex, BiConsumer<R, String> setter) {
         return addConvertAndSkipEmpty(rowIndex, colIndex, x -> x, setter);
     }
@@ -69,6 +74,10 @@ public class CellReader<R> {
 
     public <T> CellReader<R> addConvertAndSkipEmpty(String cellReference, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
         return addConvertAndSkipEmpty(ExcelCellUtils.excelCellToRowIndex(cellReference), ExcelCellUtils.excelCellToColumnIndex(cellReference), convert, setter);
+    }
+
+    public CellReader<R> addConvertAndSkipEmpty(String cellReference, BiConsumer<R, String> setter) {
+        return addConvertAndSkipEmpty(cellReference, x -> x, setter);
     }
 
     public <T> CellReader<R> addConvertAndMustExist(int rowIndex, int colIndex, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
