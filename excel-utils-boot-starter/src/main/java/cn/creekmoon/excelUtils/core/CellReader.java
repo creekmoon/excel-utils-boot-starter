@@ -8,6 +8,7 @@ import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
 import cn.hutool.poi.excel.sax.handler.RowHandler;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.CellStyle;
 
@@ -27,6 +28,17 @@ public class CellReader<R> {
     public SheetReaderContext sheetReaderContext;
 
     protected ExcelImport parent;
+
+
+    /**
+     * 获取SHEET页的总行数
+     *
+     * @return
+     */
+    @SneakyThrows
+    public Long getSheetRowCount() {
+        return parent.getSheetRowCount(sheetReaderContext.sheetIndex);
+    }
 
     public <T> CellReader<R> addConvert(String cellReference, ExFunction<String, T> convert, BiConsumer<R, T> setter) {
 

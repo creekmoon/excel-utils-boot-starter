@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
@@ -36,22 +35,7 @@ public class SheetReader<R> {
      */
     @SneakyThrows
     public Long getSheetRowCount() {
-        AtomicLong result = new AtomicLong(0);
-        Excel07SaxReader excel07SaxReader = new Excel07SaxReader(new RowHandler() {
-            @Override
-            public void handle(int sheetIndex, long rowIndex, List<Object> rowCells) {
-                if (sheetIndex != sheetReaderContext.sheetIndex) {
-                    return;
-                }
-                result.incrementAndGet();
-            }
-        });
-        try {
-            excel07SaxReader.read(this.parent.file.getInputStream(), -1);
-        } catch (Exception e) {
-            log.error("getRowCount方法读取文件异常", e);
-        }
-        return result.get();
+        return parent.getSheetRowCount(sheetReaderContext.sheetIndex);
     }
 
     public <T> SheetReader<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter) {

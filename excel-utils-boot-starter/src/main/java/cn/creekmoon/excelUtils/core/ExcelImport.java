@@ -6,6 +6,8 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.text.csv.CsvReader;
 import cn.hutool.core.text.csv.CsvRow;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.poi.excel.sax.Excel07SaxReader;
+import cn.hutool.poi.excel.sax.handler.RowHandler;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.mock.web.MockMultipartFile;
@@ -17,6 +19,7 @@ import java.io.InputStreamReader;
 import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 /**
@@ -90,6 +93,31 @@ public class ExcelImport {
         ;
         reader.parent = this;
         return reader;
+    }
+
+    /**
+     * 获取SHEET页的总行数
+     *
+     * @return
+     */
+    @SneakyThrows
+    public Long getSheetRowCount(int targetSheetIndex) {
+        AtomicLong result = new AtomicLong(0);
+        Excel07SaxReader excel07SaxReader = new Excel07SaxReader(new RowHandler() {
+            @Override
+            public void handle(int sheetIndex, long rowIndex, List<Object> rowCells) {
+                if (sheetIndex != targetSheetIndex) {
+                    return;
+                }
+                result.incrementAndGet();
+            }
+        });
+        try {
+            excel07SaxReader.read(this.file.getInputStream(), -1);
+        } catch (Exception e) {
+            log.error("getSheetRowCount方法读取文件异常", e);
+        }
+        return result.get();
     }
 
     /**

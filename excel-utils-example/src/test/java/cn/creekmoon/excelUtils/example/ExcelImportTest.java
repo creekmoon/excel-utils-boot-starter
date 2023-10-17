@@ -159,6 +159,8 @@ class ExcelImportTest {
 
         /*检查是否能够正确读取*/
         Assertions.assertEquals(studentSheetReader.getSheetRowCount(), 1001L);
+        Assertions.assertEquals(excelImport.getSheetRowCount(0), 1001L);
+
         /*检查是否能够正确读取*/
         Assertions.assertEquals(students.size(), 2);
     }
