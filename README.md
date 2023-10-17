@@ -25,7 +25,7 @@ easy-excel它基于注解的形式对于动态表头并不友好
 <dependency>
     <groupId>io.github.creekmoon</groupId>
   <artifactId>excel-utils-boot-starter</artifactId>
-  <version>1.2.8</version>
+  <version>1.2.9</version>
 </dependency>
 ```
 

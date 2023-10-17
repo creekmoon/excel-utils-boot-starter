@@ -157,7 +157,8 @@ class ExcelImportTest {
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
         List<Student> students = studentSheetReader.readAll();
 
-
+        /*检查是否能够正确读取*/
+        Assertions.assertEquals(studentSheetReader.getSheetRowCount(), 1001L);
         /*检查是否能够正确读取*/
         Assertions.assertEquals(students.size(), 2);
     }
