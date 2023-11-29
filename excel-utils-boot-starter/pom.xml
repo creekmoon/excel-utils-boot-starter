@@ -5,13 +5,13 @@
     <parent>
         <groupId>io.github.creekmoon</groupId>
         <artifactId>excel-utils-parent</artifactId>
-        <version>1.2.11</version>
+        <version>1.3.0</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
     <name>excel-utils-boot-starter</name>
     <artifactId>excel-utils-boot-starter</artifactId>
-    <version>${current.version}</version>
+    <version>1.3.0</version>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -36,10 +36,6 @@
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.poi</groupId>
-            <artifactId>poi-ooxml-schemas</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.poi</groupId>
@@ -117,8 +113,8 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <configuration>
-                        <source>1.8</source>
-                        <target>1.8</target>
+                        <source>21</source>
+                        <target>21</target>
                         <!--配置注解处理器 貌似不配置也会有提示-->
                         <annotationProcessors>
                             <annotationProcessor>

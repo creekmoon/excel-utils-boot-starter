@@ -40,19 +40,6 @@
             <groupId>io.github.creekmoon</groupId>
             <artifactId>excel-utils-boot-starter</artifactId>
         </dependency>
-        <!-- swagger start -->
-        <dependency>
-            <groupId>io.springfox</groupId>
-            <artifactId>springfox-swagger2</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.springfox</groupId>
-            <artifactId>springfox-swagger-ui</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.github.xiaoymin</groupId>
-            <artifactId>knife4j-spring-boot-starter</artifactId>
-        </dependency>
         <dependency>
             <groupId>io.github.creekmoon</groupId>
             <artifactId>excel-utils-boot-starter</artifactId>
