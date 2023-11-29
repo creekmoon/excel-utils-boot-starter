@@ -2,27 +2,27 @@ package cn.creekmoon.excelUtils.example;
 
 import cn.creekmoon.excelUtils.core.ExcelExport;
 import cn.hutool.core.util.RandomUtil;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 
-@Api(tags = "测试API")
+@Tag(name = "测试API")
 @RestController
 @Slf4j
 public class TestController {
 
 
     @GetMapping(value = "/exampleTest")
-    @ApiOperation("导出")
+    @Operation(summary = "导出")
     public void exportExcel(Integer size, HttpServletRequest request, HttpServletResponse response) throws IOException {
         /*查询数据*/
         ExcelExport.create(Student.class)
