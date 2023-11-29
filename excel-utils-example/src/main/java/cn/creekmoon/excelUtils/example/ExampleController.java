@@ -31,8 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class ExampleController {
 
-    // key=taskId  value=异步状态  这里模拟保存到redis中
-    private static final Map<String, AsyncTaskState> taskId2TaskState = new ConcurrentHashMap<>();
+
 
     @GetMapping(value = "/exportExcel")
     @Operation(summary = "导出")
