@@ -7,8 +7,10 @@ import cn.creekmoon.excelUtils.core.*;
 import cn.creekmoon.excelUtils.example.config.exception.MyNewException;
 import cn.creekmoon.excelUtils.exception.CheckedExcelException;
 import cn.hutool.core.util.RandomUtil;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.IndexedColors;
@@ -17,8 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,16 +26,15 @@ import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Api(tags = "测试API")
+@Tag(name = "测试API")
 @RestController
 @Slf4j
 public class ExampleController {
 
-    // key=taskId  value=异步状态  这里模拟保存到redis中
-    private static final Map<String, AsyncTaskState> taskId2TaskState = new ConcurrentHashMap<>();
+
 
     @GetMapping(value = "/exportExcel")
-    @ApiOperation("导出")
+    @Operation(summary = "导出")
     public void exportExcel(Integer size, HttpServletRequest request, HttpServletResponse response) throws IOException {
         /*查询数据*/
         ArrayList<Student> result = createStudentList(size != null ? size : 60_000);
@@ -61,7 +60,7 @@ public class ExampleController {
     }
 
     @GetMapping(value = "/exportExcelByStyle")
-    @ApiOperation("导出(并设置style)")
+    @Operation(summary = "导出(并设置style)")
     public void exportExcel5(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ArrayList<Student> result = createStudentList(60_000);
         ArrayList<Teacher> result2 = createTeacherList(60_000);
@@ -107,7 +106,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcel")
-    @ApiOperation("导入数据")
+    @Operation(summary = "导入数据")
     public void importExcelBySax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException, CheckedExcelException {
         //判断这个方法的执行时间
         long start = System.currentTimeMillis();
@@ -155,7 +154,7 @@ public class ExampleController {
      * @throws IOException
      */
     @PostMapping(value = "/importExcelByCell")
-    @ApiOperation("导入数据(读取指定单元格)")
+    @Operation(summary = "导入数据(读取指定单元格)")
     public void importExcelByCell(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws IOException {
 
         ExcelImport excelImport = ExcelImport.create(file);

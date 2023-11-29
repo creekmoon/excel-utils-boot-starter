@@ -12,10 +12,7 @@ excel-utils:
   import-max-parallel: 4
   async-refresh-milliseconds: 1500
   async-import-max-fail: 100
-swagger-config:
+knife4j:
   enable: true
-  protocol: http
-  base-package: cn.creekmoon.excelUtils.example
-  title: 导入导出测试API
-  version: 1.0
-  description: 导入导出测试API
+  setting:
+    language: zh_cn
