@@ -106,6 +106,7 @@ public void importExcel(MultipartFile file,HttpServletRequest request,HttpServle
 ## 快速开始
 
 ### 1.引入依赖
+注意,从 1.3.0 版本开始, 是以Spring Boot 3.0 (JDK17)的版本进行开发.
 
 ```xml
 <dependency>
