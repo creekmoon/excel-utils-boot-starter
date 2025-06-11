@@ -73,16 +73,16 @@ public class ExcelExport {
      * @param successHandler 成功回调<taskId, 文件>
      * @return taskId
      */
-    public static String createAsync(Consumer<ExcelExport> async, BiConsumer<String, File> successHandler) {
-        ExcelExport excelExport = create();
-        Thread.ofVirtual().start(() -> {
-            async.accept(excelExport);
-            File tile = excelExport.stopWrite();
-            ExcelFileUtils.cleanTempFileByPathDelay(tile);
-            successHandler.accept(excelExport.taskId, tile);
-        });
-        return excelExport.taskId;
-    }
+//    public static String createAsync(Consumer<ExcelExport> async, BiConsumer<String, File> successHandler) {
+//        ExcelExport excelExport = create();
+//        Thread.ofVirtual().start(() -> {
+//            async.accept(excelExport);
+//            File tile = excelExport.stopWrite();
+//            ExcelFileUtils.cleanTempFileByPathDelay(tile);
+//            successHandler.accept(excelExport.taskId, tile);
+//        });
+//        return excelExport.taskId;
+//    }
 
 
     /**
