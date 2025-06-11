@@ -1,6 +1,6 @@
 # 一个基于hutool的导入导出工具
 
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.github.creekmoon/excel-utils-boot-starter/badge.svg)](https://mvnrepository.com/artifact/io.github.creekmoon/excel-utils-boot-starter)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/cn.creekmoon/excel-utils-boot-starter/badge.svg)](https://mvnrepository.com/artifact/cn.creekmoon/excel-utils-boot-starter)
 [![License](http://img.shields.io/:license-apache-brightgreen.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
 前言:
@@ -35,11 +35,12 @@ public void exportExcel(HttpServletRequest request,HttpServletResponse response)
     
         ArrayList<Student> result=createStudentList(60_000);  
         
-        ExcelExport.create("excelName",Student.class)            
+        ExcelExport excelExport = ExcelExport.create();
+        excelExport.switchNewSheet(Student.class)            
         .addTitle("用户名",Student::getUserName)            
         .addTitle("全名",Student::getFullName)   //构建表头
-        .write(result)                           //写入数据                            
-        .response(response);                     //响应数据
+        .write(result);                          //写入数据
+        excelExport.response(response);          //响应数据
  }
 ```
 
@@ -56,12 +57,13 @@ public void exportExcel(HttpServletRequest request,HttpServletResponse response)
         
         ArrayList<Student> result=createStudentList(60_000);  
         
-        ExcelExport.create("excelName",Student.class)            
+        ExcelExport excelExport = ExcelExport.create();
+        excelExport.switchNewSheet(Student.class)            
         .addTitle("基础信息::用户名",Student::getUserName)          
         .addTitle("基础信息::全名",Student::getFullName)
         .addTitle("年龄",Student::getAge)
-        .write(result)                                        
-        .response(response);                                
+        .write(result);
+        excelExport.response(response);                                
         }
 ```
 
@@ -73,33 +75,35 @@ public void exportExcel(HttpServletRequest request,HttpServletResponse response)
         ArrayList<Student> students = createStudentList(60_000);
         ArrayList<Teacher> teachers = createTeacherList(60_000);
         
-        ExcelExport.create()
-        .switchSheet("学生数据", Student.class)
+        ExcelExport excelExport = ExcelExport.create();
+        excelExport.switchNewSheet(Student.class)
         .addTitle("基础信息::用户名",Student::getUserName)           
         .addTitle("基础信息::全名",Student::getFullName)
         .addTitle("年龄",Student::getAge)
-        .write(students)
+        .write(students);
         
-        .switchSheet("老师数据", Teacher.class)
+        excelExport.switchNewSheet(Teacher.class)
         .addTitle("基础信息::用户名",Teacher::getUserName)
         .addTitle("基础信息::全名",Teacher::getFullName)
         .addTitle("年龄",Teacher::getAge)
-        .write(teachers)                                      
-        .response(response);                               
+        .write(teachers);
+        
+        excelExport.response(response);                               
      }
 ```
 ```java
 // 导入数据
 @PostMapping(value = "/importExcel")
 public void importExcel(MultipartFile file,HttpServletRequest request,HttpServletResponse response){
-        ExcelImport.create(file,Student::new)
+        ExcelImport excelImport = ExcelImport.create(file);
+        excelImport.switchSheet(0, Student::new)
         .addConvert("用户名",Student::setUserName)
         .addConvert("全名",Student::setFullName)
         .addConvert("年龄",IntegerConverter::parse,Student::setAge)
         .read(student->{
                 System.out.println(student);
-        })
-        .response(response);
+        });
+        excelImport.response(response);
   }
 ```
 
@@ -111,8 +115,8 @@ public void importExcel(MultipartFile file,HttpServletRequest request,HttpServle
 ```xml
 <dependency>
     <groupId>cn.creekmoon</groupId>
-  <artifactId>excel-utils-boot-starter</artifactId>
-  <version>2.0.0</version>
+    <artifactId>excel-utils-boot-starter</artifactId>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -192,14 +196,15 @@ ExcelCellStyle.LIGHT_GREEN   // 浅绿色背景
 public void exportExcelWithStyle(HttpServletResponse response){
     ArrayList<Student> students = createStudentList(1000);
     
-    ExcelExport.create("学生成绩表", Student.class)
+    ExcelExport excelExport = ExcelExport.create();
+    excelExport.switchNewSheet(Student.class)
         // 使用内置样式：年龄大于18的行显示浅绿色
         .addTitle("姓名", Student::getName, 
                   LIGHT_GREEN, student -> student.getAge() > 18)
         
         // 自定义样式：成绩低于60分的显示红色背景
         .addTitle("成绩", Student::getScore,
-                  new ExcelCellStyle(style -> {
+                  new ExcelCellStyle((workbook, style) -> {
                       style.setFillForegroundColor(IndexedColors.RED.getIndex());
                       style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                   }), student -> student.getScore() < 60)
@@ -210,8 +215,8 @@ public void exportExcelWithStyle(HttpServletResponse response){
                   of(PALE_BLUE, s -> "B".equals(s.getGrade())),
                   of(LIGHT_ORANGE, s -> "C".equals(s.getGrade())))
         
-        .write(students)
-        .response(response);
+        .write(students);
+    excelExport.response(response);
 }
 ```
 
