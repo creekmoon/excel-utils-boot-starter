@@ -1,11 +1,8 @@
 package cn.creekmoon.excel.example;
 
 
-import cn.creekmoon.excel.core.R.ExcelImport;
-import cn.creekmoon.excel.core.R.converter.IntegerConverter;
 import cn.creekmoon.excel.core.W.ExcelExport;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
-import cn.hutool.core.io.FileUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,16 +11,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockHttpSession;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 import java.io.File;
-import java.net.URI;
 import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static cn.creekmoon.excel.core.W.title.ext.ConditionCellStyle.of;
 import static cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle.LIGHT_ORANGE;
@@ -82,5 +75,49 @@ public class ExcelExportTest {
     }
 
 
+    /**
+     * 测试导出方法2
+     *
+     * @throws Exception
+     */
+    @Test
+    public void exportTest2() throws Exception {
 
+        /*查询数据*/
+        ArrayList<Student> result = createStudentList( 60_000);
+        ArrayList<Student> result2 = createStudentList(10_000);
+
+
+        CompletableFuture<File> future = new CompletableFuture<>();
+        AtomicReference<File> resultFile = new AtomicReference<>();
+        ExcelExport.createAsync(excelExport -> {
+            TitleWriter<Student> sheet0 = excelExport.switchNewSheet(Student.class);
+            /*第一个标签页*/
+            sheet0.addTitle("基本信息::用户名", Student::getUserName)
+                    .addTitle("基本信息::全名", Student::getFullName,
+                            of(LIGHT_ORANGE, x -> true))
+                    .addTitle("年龄", Student::getAge)
+                    .addTitle("邮箱", Student::getEmail)
+                    .addTitle("生日", Student::getBirthday)
+                    .addTitle("过期时间", Student::getExpTime)
+                    .write(result);
+
+            /*第二个标签页*/
+            excelExport.switchNewSheet(Student.class)
+                    .addTitle("年龄", Student::getAge)
+                    .addTitle("邮箱", Student::getEmail)
+                    .addTitle("生日", Student::getBirthday)
+                    .addTitle("过期时间", Student::getExpTime)
+                    .write(result2);
+        }, (taskId, file) -> {
+            future.complete(file);
+        });
+
+        assertTrue(future.get().exists());
+        //输出文件大小,单位MB
+        long fileSizeInBytes = future.get().length();
+        double fileSizeInMB = (double) fileSizeInBytes / (1024 * 1024);
+        System.out.println("文件大小: " + fileSizeInMB + " MB");
+
+    }
 }
