@@ -59,7 +59,7 @@ public abstract class TitleWriter<R> extends Writer {
     abstract protected void doWrite(List<R> data);
 
     public TitleWriter<R> write(List<R> data) {
-        onWrite();
+        preWrite();
         this.doWrite(data);
         return this;
     }

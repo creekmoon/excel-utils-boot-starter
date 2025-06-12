@@ -24,7 +24,7 @@ public abstract class Writer {
     /**
      * 声明周期钩子函数, 当写入数据时
      */
-    protected void onWrite() {
+    protected void preWrite() {
     }
 
     ;
@@ -38,9 +38,9 @@ public abstract class Writer {
     ;
 
     /**
-     * 声明周期钩子函数, 当执行stopWrite时
+     * 停止写入
      */
-    protected void onStopWrite() {
+    protected void stopWrite() {
     }
 
     ;

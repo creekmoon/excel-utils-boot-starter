@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
+import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -75,9 +76,9 @@ public class ExcelExportTest {
                 .addTitle("过期时间", Student::getExpTime)
                 .write(result2);
 
-        String filePath = excelExport.stopWrite();
-        System.out.println("filePath = " + filePath);
-        Assertions.assertTrue(FileUtil.file(filePath).exists());
+        File file = excelExport.stopWrite();
+        System.out.println("filePath = " + file.getAbsolutePath());
+        Assertions.assertTrue(file.exists());
     }
 
 

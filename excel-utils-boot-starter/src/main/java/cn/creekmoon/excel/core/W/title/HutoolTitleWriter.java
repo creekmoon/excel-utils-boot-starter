@@ -47,11 +47,9 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
     }
 
     @Override
-    protected void onWrite() {
-        super.onWrite();
-
+    protected void preWrite() {
+        super.preWrite();
         getBigExcelWriter().setSheet(sheetName);
-//        getBigExcelWriter().setCurrentRowToEnd();
         this.initTitles();
     }
 
@@ -63,21 +61,17 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
      */
     @Override
     protected void doWrite(List<R> targetDataList) {
-
-//        List<List<Object>> rows =
-//                targetDataList.stream()
-//                        .map(this::changeToCellValues)
-//                        .collect(Collectors.toList());
-
-
         /* 分批写,数量上限等于滑动窗口值*/
         List<List<R>> splitDataList = ListUtil.partition(targetDataList, BigExcelWriter.DEFAULT_WINDOW_SIZE);
         for (int i = 0; i < splitDataList.size(); i++) {
+
+            /*写数据*/
             int startRowIndex = getBigExcelWriter().getCurrentRow();
             getBigExcelWriter().write(splitDataList.get(i).stream().map(this::changeToCellValues).toList());
             int endRowIndex = getBigExcelWriter().getCurrentRow();
+
+            /*记录一下当当前写入的行数*/
             currentRow = getBigExcelWriter().getCurrentRow();
-//            applyConditionStyle(splitDataList.get(i), startRowIndex, endRowIndex);
 
             /*写单元格样式*/
             for (int k = 0; k < endRowIndex - startRowIndex; k++) {
@@ -433,11 +427,11 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
     }
 
     @Override
-    protected void onStopWrite() {
-        //如果已经关闭了, 就跳过
-        if (!parent.metadatas.containsKey("CLOSED")) {
+    protected void stopWrite() {
+        //对于hutool的实现类, stopWrite方法只需要执行一次就够了
+        if (!parent.metadatas.containsKey("HUTOOL_TITLE_WRITER_CLOSED")) {
             getBigExcelWriter().close();
-            parent.metadatas.put("CLOSED", null);
+            parent.metadatas.put("HUTOOL_TITLE_WRITER_CLOSED", null);
         }
 
     }

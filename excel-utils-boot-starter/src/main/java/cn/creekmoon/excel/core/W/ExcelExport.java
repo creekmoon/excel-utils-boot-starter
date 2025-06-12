@@ -4,6 +4,8 @@ package cn.creekmoon.excel.core.W;
 import cn.creekmoon.excel.core.W.title.HutoolTitleWriter;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
 import cn.creekmoon.excel.util.ExcelFileUtils;
+import cn.creekmoon.excel.util.exception.ExConsumer;
+import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.map.BiMap;
 import cn.hutool.core.text.StrFormatter;
@@ -12,11 +14,14 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Workbook;
 
+import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * @author JY
@@ -31,7 +36,7 @@ public class ExcelExport {
 
     /*唯一识别名称*/
     @Getter
-    protected String taskId = UUID.fastUUID().toString();
+    protected String taskId = UUID.randomUUID().toString();
     /*生成的临时文件路径*/
     @Getter
     protected String resultFilePath = ExcelFileUtils.generateXlsxAbsoluteFilePath(taskId);
@@ -58,6 +63,25 @@ public class ExcelExport {
         ExcelExport excelExport = new ExcelExport();
         excelExport.excelName = "export_result_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy_MM_dd_HH_mm")) + ".xlsx";
         return excelExport;
+    }
+
+
+    /**
+     * 异步创建excel
+     *
+     * @param async
+     * @param successHandler 成功回调<taskId, 文件>
+     * @return taskId
+     */
+    public static String createAsync(Consumer<ExcelExport> async, BiConsumer<String, File> successHandler) {
+        ExcelExport excelExport = create();
+        Thread.ofVirtual().start(() -> {
+            async.accept(excelExport);
+            File tile = excelExport.stopWrite();
+            ExcelFileUtils.cleanTempFileByPathDelay(tile);
+            successHandler.accept(excelExport.taskId, tile);
+        });
+        return excelExport.taskId;
     }
 
 
@@ -97,8 +121,8 @@ public class ExcelExport {
      * @throws IOException
      */
     public void response(HttpServletResponse response) throws IOException {
-        String filePath = this.stopWrite();
-        ExcelFileUtils.response(filePath, excelName, response);
+        File file = this.stopWrite();
+        ExcelFileUtils.response(file, excelName, response);
     }
 
 
@@ -109,16 +133,16 @@ public class ExcelExport {
      *
      * @return 结果文件绝对路径
      */
-    public String stopWrite() {
+    public File stopWrite() {
 
         Workbook workbook = sheetIndex2SheetWriter.get(0).getWorkbook();
         sheetIndex2SheetWriter.values()
                 .stream()
                 .sorted(Comparator.comparing(Writer::getSheetIndex))
                 .peek(x -> workbook.setSheetOrder(x.getSheetName(), x.getSheetIndex()))
-                .forEach(Writer::onStopWrite);
+                .forEach(Writer::stopWrite);
 
-        return getResultFilePath();
+        return new File(getResultFilePath());
     }
 
 
