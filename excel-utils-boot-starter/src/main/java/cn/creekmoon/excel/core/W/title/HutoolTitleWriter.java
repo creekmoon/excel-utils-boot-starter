@@ -20,12 +20,9 @@ import java.util.stream.Collectors;
 public class HutoolTitleWriter<R> extends TitleWriter<R> {
 
 
-    protected ExcelExport parent;
-
-
     /*写入器 hutoolTitleWriter专用*/
     public BigExcelWriter bigExcelWriter;
-
+    protected ExcelExport parent;
     /**
      * 当前写入行,切换sheet页时需要还原这个上下文数据
      */
@@ -37,6 +34,11 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         this.sheetName = "Sheet" + sheetIndex;
     }
 
+    public HutoolTitleWriter(ExcelExport parent, Integer sheetIndex, String sheetName) {
+        this.parent = parent;
+        this.sheetIndex = sheetIndex;
+        this.sheetName = sheetName;
+    }
 
     /**
      * 获取当前的表头数量
@@ -46,94 +48,34 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         return titles.size();
     }
 
-    @Override
-    protected void preWrite() {
-        super.preWrite();
-        getBigExcelWriter().setSheet(sheetName);
-        this.initTitles();
+    /**
+     * 默认设置列宽 : 简单粗暴将前500列都设置宽度20
+     */
+    public HutoolTitleWriter<R> setColumnWidthDefault() {
+        this.setColumnWidth(500, 20);
+        return this;
     }
 
     /**
-     * 以对象形式写入
-     *
-     * @param targetDataList 数据集
-     * @return
+     * 自动设置列宽
      */
-    @Override
-    protected void doWrite(List<R> targetDataList) {
-        /* 分批写,数量上限等于滑动窗口值*/
-        List<List<R>> splitDataList = ListUtil.partition(targetDataList, BigExcelWriter.DEFAULT_WINDOW_SIZE);
-        for (int i = 0; i < splitDataList.size(); i++) {
-
-            /*写数据*/
-            int startRowIndex = getBigExcelWriter().getCurrentRow();
-            getBigExcelWriter().write(splitDataList.get(i).stream().map(this::changeToCellValues).toList());
-            int endRowIndex = getBigExcelWriter().getCurrentRow();
-
-            /*记录一下当当前写入的行数*/
-            currentRow = getBigExcelWriter().getCurrentRow();
-
-            /*写单元格样式*/
-            for (int k = 0; k < endRowIndex - startRowIndex; k++) {
-                for (int colIndex = 0; colIndex < titles.size(); colIndex++) {
-                    /*写回样式*/
-                    int finalI = i;
-                    int finalK = k;
-                    CellStyle runningTimeCellStyle = titles.get(colIndex)
-                            .conditionCellStyleList
-                            .stream()
-                            .filter(Objects::nonNull)
-                            .filter(x -> x.getCondition().test(splitDataList.get(finalI).get(finalK)))
-                            .map(ConditionCellStyle::getDefaultCellStyle)
-                            .map(this::getRunningTimeCellStyle)
-                            .findAny()
-                            .orElse(null);
-                    if (runningTimeCellStyle == null) {
-                        continue;
-                    }
-                    getBigExcelWriter().setStyle(runningTimeCellStyle, colIndex, k + startRowIndex);
-                }
-            }
-
-
+    public void setColumnWidthAuto() {
+        try {
+            getBigExcelWriter().autoSizeColumnAll();
+        } catch (Exception ignored) {
         }
-
-        /*将传入过来的rows按每批100次进行写入到硬盘 此时可以设置style, 底层不会报"已经写入磁盘无法编辑"的异常*/
-//        List<List<R>> splitObjects = ListUtil.partition(targetDataList, BigExcelWriter.DEFAULT_WINDOW_SIZE);
-//        List<List<List<Object>>> splitRows = ListUtil.partition(rows, BigExcelWriter.DEFAULT_WINDOW_SIZE);
-//        for (int i = 0; i < splitRows.size(); i++) {
-//            int startRowIndex = getBigExcelWriter().getCurrentRow();
-//            getBigExcelWriter().write(splitRows.get(i));
-//            int endRowIndex = getBigExcelWriter().getCurrentRow();
-//            applyConditionStyle(splitObjects.get(i), startRowIndex, endRowIndex);
-//        }
-
-
     }
 
-
     /**
-     * 将对象转化为List<Object>形式, 每个下标对应一列
-     *
-     * @param dataObject
-     * @return
+     * 默认设置列宽 : 简单粗暴将前500列都设置宽度
      */
-    private List<Object> changeToCellValues(R dataObject) {
-        List<Object> row = new LinkedList<>();
-        for (Title title : titles) {
-            //当前行中的某个属性值
-            Object data = null;
+    public void setColumnWidth(int cols, int width) {
+        for (int i = 0; i < cols; i++) {
             try {
-                data = title.valueFunction.apply(dataObject);
-            } catch (Exception exception) {
-                // nothing to do
-                if (parent.debugger) {
-                    log.info("[Excel构建]生成Excel获取数据值时发生错误!已经忽略错误并设置为NULL值!", exception);
-                }
+                getBigExcelWriter().setColumnWidth(i, width);
+            } catch (Exception ignored) {
             }
-            row.add(data);
         }
-        return row;
     }
 
 
@@ -193,6 +135,51 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
 //    public TitleWriter<R> setDataStyle(Predicate<R> condition, Consumer<CellStyle> styleInitializer) {
 //        return setDataStyle(titles.size() - 1, condition, styleInitializer);
 //    }
+
+    /**
+     * 内部操作类,但是暴露出来了,希望最好不要用这个方法
+     *
+     * @return
+     */
+    public BigExcelWriter getBigExcelWriter() {
+        //如果上一个sheet页已经存在, 复用上一个sheet页的上下文
+        if (bigExcelWriter == null && parent.sheetIndex2SheetWriter.containsKey(sheetIndex - 1)) {
+            bigExcelWriter = ((HutoolTitleWriter) parent.sheetIndex2SheetWriter.get(sheetIndex - 1)).bigExcelWriter;
+        }
+        if (bigExcelWriter == null) {
+            bigExcelWriter = ExcelUtil.getBigWriter(parent.getResultFilePath());
+        }
+        return bigExcelWriter;
+    }
+
+    @Override
+    public Workbook getWorkbook() {
+        return getBigExcelWriter().getWorkbook();
+    }
+
+    /**
+     * 将对象转化为List<Object>形式, 每个下标对应一列
+     *
+     * @param dataObject
+     * @return
+     */
+    private List<Object> changeToCellValues(R dataObject) {
+        List<Object> row = new LinkedList<>();
+        for (Title title : titles) {
+            //当前行中的某个属性值
+            Object data = null;
+            try {
+                data = title.valueFunction.apply(dataObject);
+            } catch (Exception exception) {
+                // nothing to do
+                if (parent.debugger) {
+                    log.info("[Excel构建]生成Excel获取数据值时发生错误!已经忽略错误并设置为NULL值!", exception);
+                }
+            }
+            row.add(data);
+        }
+        return row;
+    }
 
     /**
      * 初始化标题
@@ -294,7 +281,6 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         this.setColumnWidthDefault();
     }
 
-
     /**
      * 是否已经初始化好表头
      *
@@ -311,37 +297,6 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         this.MAX_TITLE_DEPTH = null;
         this.titles.clear();
         this.depth2Titles.clear();
-    }
-
-
-    /**
-     * 默认设置列宽 : 简单粗暴将前500列都设置宽度20
-     */
-    public HutoolTitleWriter<R> setColumnWidthDefault() {
-        this.setColumnWidth(500, 20);
-        return this;
-    }
-
-    /**
-     * 自动设置列宽
-     */
-    public void setColumnWidthAuto() {
-        try {
-            getBigExcelWriter().autoSizeColumnAll();
-        } catch (Exception ignored) {
-        }
-    }
-
-    /**
-     * 默认设置列宽 : 简单粗暴将前500列都设置宽度
-     */
-    public void setColumnWidth(int cols, int width) {
-        for (int i = 0; i < cols; i++) {
-            try {
-                getBigExcelWriter().setColumnWidth(i, width);
-            } catch (Exception ignored) {
-            }
-        }
     }
 
     /**
@@ -377,29 +332,81 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         return title;
     }
 
+    @Override
+    protected void preWrite() {
+        super.preWrite();
+
+
+        if (getBigExcelWriter().getSheetCount() == 1
+                && getBigExcelWriter().getSheets().get(0).getPhysicalNumberOfRows() == 0
+        ) {
+            // 如果当前sheet页已经存在,且没有写入过, 说明是刚初始化的. 不用创建新页
+            getBigExcelWriter().renameSheet(sheetName);
+        } else {
+            //以指定名称创建新页, 或者切换到指定页
+            getBigExcelWriter().setSheet(sheetName);
+        }
+
+        this.initTitles();
+    }
 
     /**
-     * 内部操作类,但是暴露出来了,希望最好不要用这个方法
+     * 以对象形式写入
      *
+     * @param targetDataList 数据集
      * @return
      */
-    public BigExcelWriter getBigExcelWriter() {
-        //如果上一个sheet页已经存在, 复用上一个sheet页的上下文
-        if (bigExcelWriter == null && parent.sheetIndex2SheetWriter.containsKey(sheetIndex - 1)) {
-            bigExcelWriter = ((HutoolTitleWriter) parent.sheetIndex2SheetWriter.get(sheetIndex - 1)).bigExcelWriter;
-        }
-        if (bigExcelWriter == null) {
-            bigExcelWriter = ExcelUtil.getBigWriter(parent.getResultFilePath());
-        }
-        return bigExcelWriter;
-    }
-
-
     @Override
-    public Workbook getWorkbook() {
-        return getBigExcelWriter().getWorkbook();
-    }
+    protected void doWrite(List<R> targetDataList) {
+        /* 分批写,数量上限等于滑动窗口值*/
+        List<List<R>> splitDataList = ListUtil.partition(targetDataList, BigExcelWriter.DEFAULT_WINDOW_SIZE);
+        for (int i = 0; i < splitDataList.size(); i++) {
 
+            /*写数据*/
+            int startRowIndex = getBigExcelWriter().getCurrentRow();
+            getBigExcelWriter().write(splitDataList.get(i).stream().map(this::changeToCellValues).toList());
+            int endRowIndex = getBigExcelWriter().getCurrentRow();
+
+            /*记录一下当当前写入的行数*/
+            currentRow = getBigExcelWriter().getCurrentRow();
+
+            /*写单元格样式*/
+            for (int k = 0; k < endRowIndex - startRowIndex; k++) {
+                for (int colIndex = 0; colIndex < titles.size(); colIndex++) {
+                    /*写回样式*/
+                    int finalI = i;
+                    int finalK = k;
+                    CellStyle runningTimeCellStyle = titles.get(colIndex)
+                            .conditionCellStyleList
+                            .stream()
+                            .filter(Objects::nonNull)
+                            .filter(x -> x.getCondition().test(splitDataList.get(finalI).get(finalK)))
+                            .map(ConditionCellStyle::getDefaultCellStyle)
+                            .map(this::getRunningTimeCellStyle)
+                            .findAny()
+                            .orElse(null);
+                    if (runningTimeCellStyle == null) {
+                        continue;
+                    }
+                    getBigExcelWriter().setStyle(runningTimeCellStyle, colIndex, k + startRowIndex);
+                }
+            }
+
+
+        }
+
+        /*将传入过来的rows按每批100次进行写入到硬盘 此时可以设置style, 底层不会报"已经写入磁盘无法编辑"的异常*/
+//        List<List<R>> splitObjects = ListUtil.partition(targetDataList, BigExcelWriter.DEFAULT_WINDOW_SIZE);
+//        List<List<List<Object>>> splitRows = ListUtil.partition(rows, BigExcelWriter.DEFAULT_WINDOW_SIZE);
+//        for (int i = 0; i < splitRows.size(); i++) {
+//            int startRowIndex = getBigExcelWriter().getCurrentRow();
+//            getBigExcelWriter().write(splitRows.get(i));
+//            int endRowIndex = getBigExcelWriter().getCurrentRow();
+//            applyConditionStyle(splitObjects.get(i), startRowIndex, endRowIndex);
+//        }
+
+
+    }
 
     /**
      * 通过内置的样式换取为当前工作簿里面的样式

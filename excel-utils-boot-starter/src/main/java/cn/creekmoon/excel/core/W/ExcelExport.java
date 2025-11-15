@@ -108,6 +108,16 @@ public class ExcelExport {
         return newTitleWriter;
     }
 
+    /**
+     * 切换到新的标签页
+     */
+    public <T> TitleWriter<T> switchNewSheet(String sheetName, Class<T> newDataClass) {
+        HutoolTitleWriter<T> newTitleWriter = new HutoolTitleWriter<T>(this, sheetIndex2SheetWriter.size(),sheetName);
+        sheetIndex2SheetWriter.put(newTitleWriter.getSheetIndex(), newTitleWriter);
+        return newTitleWriter;
+    }
+
+
     public ExcelExport debug() {
         this.debugger = true;
         return this;
