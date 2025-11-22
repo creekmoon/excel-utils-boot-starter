@@ -34,6 +34,10 @@ public class TitleReaderResult<R> extends ReaderResult<R> {
             // 如果转化阶段就存在失败数据, 意味着数据不完整,应该返回空
             return new ArrayList<>();
         }
+        if (rowIndex2dataBiMap.isEmpty() && !rowIndex2msg.isEmpty()) {
+            // 数据缓存已关闭，返回空列表
+            log.warn("[Excel读取警告] 数据缓存已关闭(enableDataMemoryCache=false)，getAll()返回空列表。如需获取数据，请使用read(consumer)进行流式消费。");
+        }
         return new ArrayList<>(rowIndex2dataBiMap.values());
     }
 
@@ -43,6 +47,11 @@ public class TitleReaderResult<R> extends ReaderResult<R> {
     }
 
     public TitleReaderResult<R> consume(ExBiConsumer<Integer, R> rowIndexAndDataConsumer) {
+        if (rowIndex2dataBiMap.isEmpty() && !rowIndex2msg.isEmpty()) {
+            // 数据缓存已关闭，无法批量消费
+            log.warn("[Excel读取警告] 数据缓存已关闭(enableDataMemoryCache=false)，consume()方法无数据可消费。如需消费数据，请使用read(consumer)进行流式消费。");
+            return this;
+        }
         rowIndex2dataBiMap.forEach((rowIndex, data) -> {
             try {
                 rowIndexAndDataConsumer.accept(rowIndex, data);
@@ -61,7 +70,10 @@ public class TitleReaderResult<R> extends ReaderResult<R> {
     public TitleReaderResult<R> setResultMsg(R data, String msg) {
         Integer i = getDataIndexOrNull(data);
         if (i == null) {
-            return null;
+            if (rowIndex2dataBiMap.isEmpty() && !rowIndex2msg.isEmpty()) {
+                log.warn("[Excel读取警告] 数据缓存已关闭(enableDataMemoryCache=false)，无法通过数据对象反查行号设置消息。请使用setResultMsg(Integer rowIndex, String msg)方法。");
+            }
+            return this;
         }
         rowIndex2msg.put(i, msg);
         return this;

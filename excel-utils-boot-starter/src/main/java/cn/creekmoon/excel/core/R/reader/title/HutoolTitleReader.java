@@ -412,6 +412,11 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                 if (getParent().debugger) {
                     log.info("[DEBUGGER][HutoolTitleReader.handle] 接收回调: sheetIndex={}, rowIndex={}, rowListSize={}, targetSheetIndex={}", 
                         sheetIndex, rowIndex, rowList == null ? 0 : rowList.size(), targetSheetIndex);
+                    // 🔍 打印前几行的实际内容以确认sheet是否正确
+                    if (rowIndex <= 5) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] 🔍实际行内容(前6行): rowIndex={}, rowList={}", 
+                            rowIndex, rowList);
+                    }
                 }
                 
                 if (targetSheetIndex != sheetIndex) {
@@ -423,12 +428,20 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                 }
 
                 /*读取标题*/
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolTitleReader.handle] 标题行检查: rowIndex={}, titleRowIndex={}, rowIndex==titleRowIndex={}", 
+                        rowIndex, titleRowIndex, rowIndex == titleRowIndex);
+                }
                 if (rowIndex == titleRowIndex) {
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] 进入标题行读取逻辑: rowListSize={}, rowList={}", 
+                            rowList.size(), rowList);
+                    }
                     for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
                         colIndex2Title.put(colIndex, StringConverter.parse(rowList.get(colIndex)));
                     }
                     if (getParent().debugger) {
-                        log.info("[DEBUGGER][HutoolTitleReader.handle] 读取标题行: rowIndex={}, 标题={}", 
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] 读取标题行完成: rowIndex={}, 标题={}", 
                             rowIndex, colIndex2Title);
                     }
                     return;
@@ -455,14 +468,24 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                 }
 
                 /*Excel解析原生的数据. 目前只用于内部数据转换*/
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolTitleReader.handle] 准备构建hashDataMap: rowIndex={}, colIndex2Title={}, rowListSize={}", 
+                        rowIndex, colIndex2Title, rowList.size());
+                }
                 HashMap<String, String> hashDataMap = new LinkedHashMap<>();
                 for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
-                    hashDataMap.put(colIndex2Title.get(colIndex), StringConverter.parse(rowList.get(colIndex)));
+                    String titleKey = colIndex2Title.get(colIndex);
+                    String cellValue = StringConverter.parse(rowList.get(colIndex));
+                    if (getParent().debugger && colIndex < 3) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] 映射单元格: colIndex={}, title={}, value={}", 
+                            colIndex, titleKey, cellValue);
+                    }
+                    hashDataMap.put(titleKey, cellValue);
                 }
                 
                 if (getParent().debugger) {
-                    log.info("[DEBUGGER][HutoolTitleReader.handle] 构建hashDataMap成功: rowIndex={}, dataMap={}", 
-                        rowIndex, hashDataMap);
+                    log.info("[DEBUGGER][HutoolTitleReader.handle] 构建hashDataMap成功: rowIndex={}, dataMap.keys={}", 
+                        rowIndex, hashDataMap.keySet());
                 }
                 
                 /*转换成业务对象*/
@@ -481,8 +504,10 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                         convertPostProcessor.accept(currentObject);
                     }
                     titleReaderResult.rowIndex2msg.put((int) rowIndex, CONVERT_SUCCESS_MSG);
-                    /*消费*/
-                    titleReaderResult.rowIndex2dataBiMap.put((int) rowIndex, currentObject);
+                    /*消费 - 根据enableDataMemoryCache决定是否缓存数据对象*/
+                    if (enableDataMemoryCache) {
+                        titleReaderResult.rowIndex2dataBiMap.put((int) rowIndex, currentObject);
+                    }
                     
                     if (getParent().debugger) {
                         log.info("[DEBUGGER][HutoolTitleReader.handle] 数据处理成功: rowIndex={}, object={}", 
@@ -566,6 +591,17 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
      */
     public HutoolTitleReader<R> disableBlankRowFilter() {
         super.ENABLE_BLANK_ROW_FILTER = false;
+        return this;
+    }
+
+    /**
+     * 禁用数据内存缓存
+     * 适用于大数据量导入场景，可显著降低内存占用
+     * 
+     * @return HutoolTitleReader实例（支持链式调用）
+     */
+    public HutoolTitleReader<R> disableDataMemoryCache() {
+        super.enableDataMemoryCache = false;
         return this;
     }
 

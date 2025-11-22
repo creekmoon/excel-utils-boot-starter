@@ -49,6 +49,20 @@ public abstract class TitleReader<R> extends Reader<R> {
     /*启用空白行过滤*/
     public boolean ENABLE_BLANK_ROW_FILTER = true;
 
+    /**
+     * 是否启用数据内存缓存
+     * 当设置为 false 时，不会将读取的数据对象缓存到 rowIndex2dataBiMap 中
+     * 这可以在大数据量导入时显著降低内存占用
+     * 
+     * 注意：关闭缓存后以下功能将受限：
+     * - getAll() 方法将返回空列表
+     * - consume() 方法在 read() 之后调用将无数据可消费（建议使用 read(consumer) 流式消费）
+     * - setResultMsg(R data, String msg) 无法通过数据对象设置消息
+     * 
+     * 默认值：true（启用缓存，保持向后兼容）
+     */
+    public boolean enableDataMemoryCache = true;
+
     public TitleReader(ExcelImport parent) {
         super(parent);
     }
@@ -93,6 +107,13 @@ public abstract class TitleReader<R> extends Reader<R> {
      */
     abstract public <T> TitleReader<T> reset(Supplier<T> newObjectSupplier);
 
+    /**
+     * 禁用数据内存缓存
+     * 适用于大数据量导入场景，可显著降低内存占用
+     * 
+     * @return TitleReader实例（支持链式调用）
+     */
+    abstract public TitleReader<R> disableDataMemoryCache();
 
 
 }

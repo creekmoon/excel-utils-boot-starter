@@ -45,6 +45,12 @@ public abstract class TitleWriter<R> extends Writer {
      */
     protected int latestRowIndex = Integer.MAX_VALUE;
 
+    /**
+     * 标记用户是否手动调用了range方法
+     * 如果为false，系统会在initTitles后自动根据MAX_TITLE_DEPTH调整firstRowIndex
+     */
+    protected boolean isRangeManuallySet = false;
+
 
     /**
      * 添加标题

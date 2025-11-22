@@ -65,6 +65,9 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         // 继承当前行位置
         newWriter.currentRow = this.currentRow;
         
+        // 继承range设置标志位（reset后默认已经手动定位了位置）
+        newWriter.isRangeManuallySet = true;
+        
         return newWriter;
     }
 
@@ -177,6 +180,7 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         this.titleRowIndex = titleRowIndex;
         this.firstRowIndex = firstDataRowIndex;
         this.latestRowIndex = lastDataRowIndex;
+        this.isRangeManuallySet = true;
         return this;
     }
 
@@ -264,6 +268,18 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
                 .orElse(1);
         if (parent.debugger) {
             System.out.println("[Excel构建] 表头深度获取成功! 表头最大深度为" + MAX_TITLE_DEPTH);
+        }
+
+        /*如果用户没有手动设置range，则根据多级表头深度自动调整firstRowIndex*/
+        if (!isRangeManuallySet && MAX_TITLE_DEPTH > 1) {
+            int expectedFirstRowIndex = titleRowIndex + MAX_TITLE_DEPTH;
+            if (firstRowIndex < expectedFirstRowIndex) {
+                if (parent.debugger) {
+                    System.out.println("[Excel构建] 检测到多级表头(深度=" + MAX_TITLE_DEPTH + 
+                        "), 自动调整数据起始行: " + firstRowIndex + " -> " + expectedFirstRowIndex);
+                }
+                firstRowIndex = expectedFirstRowIndex;
+            }
         }
 
         /*多级表头初始化*/
