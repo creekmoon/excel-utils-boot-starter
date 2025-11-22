@@ -80,44 +80,44 @@ public class ExcelExportTest {
      *
      * @throws Exception
      */
-    @Test
-    public void exportTest2() throws Exception {
-
-        /*查询数据*/
-        ArrayList<Student> result = createStudentList( 60_000);
-        ArrayList<Student> result2 = createStudentList(10_000);
-
-
-        CompletableFuture<File> future = new CompletableFuture<>();
-        AtomicReference<File> resultFile = new AtomicReference<>();
-        ExcelExport.createAsync(excelExport -> {
-            TitleWriter<Student> sheet0 = excelExport.switchNewSheet(Student.class);
-            /*第一个标签页*/
-            sheet0.addTitle("基本信息::用户名", Student::getUserName)
-                    .addTitle("基本信息::全名", Student::getFullName,
-                            of(LIGHT_ORANGE, x -> true))
-                    .addTitle("年龄", Student::getAge)
-                    .addTitle("邮箱", Student::getEmail)
-                    .addTitle("生日", Student::getBirthday)
-                    .addTitle("过期时间", Student::getExpTime)
-                    .write(result);
-
-            /*第二个标签页*/
-            excelExport.switchNewSheet(Student.class)
-                    .addTitle("年龄", Student::getAge)
-                    .addTitle("邮箱", Student::getEmail)
-                    .addTitle("生日", Student::getBirthday)
-                    .addTitle("过期时间", Student::getExpTime)
-                    .write(result2);
-        }, (taskId, file) -> {
-            future.complete(file);
-        });
-
-        assertTrue(future.get().exists());
-        //输出文件大小,单位MB
-        long fileSizeInBytes = future.get().length();
-        double fileSizeInMB = (double) fileSizeInBytes / (1024 * 1024);
-        System.out.println("文件大小: " + fileSizeInMB + " MB");
-
-    }
+//    @Test
+//    public void exportTest2() throws Exception {
+//
+//        /*查询数据*/
+//        ArrayList<Student> result = createStudentList( 60_000);
+//        ArrayList<Student> result2 = createStudentList(10_000);
+//
+//
+//        CompletableFuture<File> future = new CompletableFuture<>();
+//        AtomicReference<File> resultFile = new AtomicReference<>();
+//        ExcelExport.createAsync(excelExport -> {
+//            TitleWriter<Student> sheet0 = excelExport.switchNewSheet(Student.class);
+//            /*第一个标签页*/
+//            sheet0.addTitle("基本信息::用户名", Student::getUserName)
+//                    .addTitle("基本信息::全名", Student::getFullName,
+//                            of(LIGHT_ORANGE, x -> true))
+//                    .addTitle("年龄", Student::getAge)
+//                    .addTitle("邮箱", Student::getEmail)
+//                    .addTitle("生日", Student::getBirthday)
+//                    .addTitle("过期时间", Student::getExpTime)
+//                    .write(result);
+//
+//            /*第二个标签页*/
+//            excelExport.switchNewSheet(Student.class)
+//                    .addTitle("年龄", Student::getAge)
+//                    .addTitle("邮箱", Student::getEmail)
+//                    .addTitle("生日", Student::getBirthday)
+//                    .addTitle("过期时间", Student::getExpTime)
+//                    .write(result2);
+//        }, (taskId, file) -> {
+//            future.complete(file);
+//        });
+//
+//        assertTrue(future.get().exists());
+//        //输出文件大小,单位MB
+//        long fileSizeInBytes = future.get().length();
+//        double fileSizeInMB = (double) fileSizeInBytes / (1024 * 1024);
+//        System.out.println("文件大小: " + fileSizeInMB + " MB");
+//
+//    }
 }

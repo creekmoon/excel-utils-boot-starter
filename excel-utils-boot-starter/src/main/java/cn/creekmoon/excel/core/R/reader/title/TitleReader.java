@@ -2,11 +2,12 @@ package cn.creekmoon.excel.core.R.reader.title;
 
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.reader.Reader;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
+import cn.hutool.core.map.BiMap;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
@@ -49,8 +50,25 @@ public abstract class TitleReader<R> extends Reader<R> {
     /*启用空白行过滤*/
     public boolean ENABLE_BLANK_ROW_FILTER = true;
 
+    /*K=行下标 V=数据*/
+    public BiMap<Integer, R> rowIndex2dataBiMap = new BiMap<>(new LinkedHashMap<>());
+
+    /*行结果集合*/
+    public LinkedHashMap<Integer, String> rowIndex2msg = new LinkedHashMap<>();
+
+    /*存在读取失败的数据*/
+    public AtomicReference<Boolean> EXISTS_READ_FAIL = new AtomicReference<>(false);
+
     public TitleReader(ExcelImport parent) {
         super(parent);
+    }
+
+    public List<R> getAll() {
+        if (EXISTS_READ_FAIL.get()) {
+            // 如果转化阶段就存在失败数据, 意味着数据不完整,应该返回空
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(rowIndex2dataBiMap.values());
     }
 
 
@@ -70,9 +88,9 @@ public abstract class TitleReader<R> extends Reader<R> {
 
     abstract public <T> TitleReader<R> addConvertPostProcessor(ExConsumer<R> postProcessor);
 
-    abstract public TitleReaderResult<R> read(ExConsumer<R> dataConsumer);
+    abstract public TitleReader<R> read(ExConsumer<R> dataConsumer);
 
-    abstract public TitleReaderResult<R> read();
+    abstract public TitleReader<R> read();
 
     abstract public TitleReader<R> range(int titleRowIndex, int firstDataRowIndex, int lastDataRowIndex);
 

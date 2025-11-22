@@ -3,7 +3,6 @@ package cn.creekmoon.excel.core.R.reader.title;
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.exception.CheckedExcelException;
 import cn.creekmoon.excel.util.exception.ExConsumer;
@@ -20,7 +19,6 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
@@ -34,7 +32,6 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
 
     public HutoolTitleReader(ExcelImport parent, String sheetRid, String sheetName, Supplier newObjectSupplier) {
         super(parent);
-        super.readerResult = new TitleReaderResult<R>();
         super.sheetRid = sheetRid;
         super.sheetName = sheetName;
         super.newObjectSupplier = newObjectSupplier;
@@ -158,18 +155,25 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
 
 
     @Override
-    public TitleReaderResult<R> read(ExConsumer<R> dataConsumer) {
-        TitleReaderResult<R> result = read().consume(dataConsumer);
-        ((TitleReaderResult) getReadResult()).consumeSuccessTime = LocalDateTime.now();
-        return result;
+    public TitleReader<R> read(ExConsumer<R> dataConsumer) {
+        read();
+        rowIndex2dataBiMap.forEach((rowIndex, data) -> {
+            try {
+                dataConsumer.accept(data);
+                rowIndex2msg.put(rowIndex, ExcelConstants.IMPORT_SUCCESS_MSG);
+            } catch (Exception e) {
+                String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
+                rowIndex2msg.put(rowIndex, exceptionMsg);
+            }
+        });
+        return this;
     }
 
     @SneakyThrows
     @Override
-    public TitleReaderResult<R> read() {
+    public TitleReader<R> read() {
         /*尝试拿锁*/
         ExcelUtilsConfig.importParallelSemaphore.acquire();
-        getReadResult().readStartTime = LocalDateTime.now();
         try {
             //新版读取 使用SAX读取模式
             if (getParent().debugger) {
@@ -188,11 +192,10 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常, sheetRid={}, sheetName={}", sheetRid, sheetName, e);
         } finally {
-            getReadResult().readSuccessTime = LocalDateTime.now();
             /*释放信号量*/
             ExcelUtilsConfig.importParallelSemaphore.release();
         }
-        return getReadResult();
+        return this;
     }
 
 
@@ -298,8 +301,6 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
 
     ExcelSaxReader initSaxReader() throws IOException {
 
-        TitleReaderResult titleReaderResult = (TitleReaderResult) getReadResult();
-
         /*返回一个Sax读取器*/
         return  ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()),new RowHandler() {
 
@@ -350,17 +351,15 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     for (ExConsumer convertPostProcessor : convertPostProcessors) {
                         convertPostProcessor.accept(currentObject);
                     }
-                    titleReaderResult.rowIndex2msg.put((int) rowIndex, CONVERT_SUCCESS_MSG);
+                    rowIndex2msg.put((int) rowIndex, CONVERT_SUCCESS_MSG);
                     /*消费*/
-                    titleReaderResult.rowIndex2dataBiMap.put((int) rowIndex, currentObject);
+                    rowIndex2dataBiMap.put((int) rowIndex, currentObject);
                 } catch (Exception e) {
                     //假如存在任一数据convert阶段就失败的单, 将打一个标记
-                    titleReaderResult.EXISTS_READ_FAIL.set(true);
-                    titleReaderResult.errorCount.incrementAndGet();
+                    EXISTS_READ_FAIL.set(true);
                     /*写入导出Excel结果*/
                     String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
-                    getReadResult().errorReport.append(StrFormatter.format("第[{}]行发生错误[{}]", (int) rowIndex + 1, exceptionMsg));
-                    titleReaderResult.rowIndex2msg.put((int) rowIndex, exceptionMsg);
+                    rowIndex2msg.put((int) rowIndex, exceptionMsg);
 
                 }
             }
@@ -400,12 +399,6 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     public HutoolTitleReader<R> disableBlankRowFilter() {
         super.ENABLE_BLANK_ROW_FILTER = false;
         return this;
-    }
-
-
-    @Override
-    public TitleReaderResult<R> getReadResult() {
-        return (TitleReaderResult) readerResult;
     }
 
 }

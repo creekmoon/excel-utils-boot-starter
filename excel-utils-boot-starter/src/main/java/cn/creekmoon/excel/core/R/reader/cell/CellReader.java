@@ -7,6 +7,7 @@ import cn.creekmoon.excel.util.exception.ExFunction;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 
 
@@ -40,8 +41,24 @@ public abstract class CellReader<R> extends Reader<R> {
     /*标志位, 模板一致性检查已经失败 */
     protected boolean TEMPLATE_CONSISTENCY_CHECK_HAS_FAILED = false;
 
+    private R data = null;
+
+    /*存在读取失败的数据*/
+    public AtomicReference<Boolean> EXISTS_READ_FAIL = new AtomicReference<>(false);
+
     public CellReader(ExcelImport parent) {
         super(parent);
+    }
+
+    public R getData() {
+        if (EXISTS_READ_FAIL.get()) {
+            return null;
+        }
+        return data;
+    }
+
+    public void setData(R data) {
+        this.data = data;
     }
 
 

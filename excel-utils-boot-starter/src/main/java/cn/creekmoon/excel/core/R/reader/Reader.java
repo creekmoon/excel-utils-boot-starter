@@ -1,7 +1,6 @@
 package cn.creekmoon.excel.core.R.reader;
 
 import cn.creekmoon.excel.core.R.ExcelImport;
-import cn.creekmoon.excel.core.R.readerResult.ReaderResult;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import lombok.Getter;
 
@@ -17,8 +16,6 @@ public abstract class Reader<R> {
     //读取器持有其父类
     @Getter
     ExcelImport parent;
-
-    public ReaderResult readerResult;
 
     public Supplier newObjectSupplier;
 
@@ -37,12 +34,5 @@ public abstract class Reader<R> {
 
     /*标志位, 模板一致性检查已经失败 */
     public boolean TEMPLATE_CONSISTENCY_CHECK_FAILED = false;
-
-    public abstract ReaderResult getReadResult();
-
-    public abstract ReaderResult<R> read(ExConsumer<R> consumer) throws Exception;
-
-    public abstract ReaderResult<R> read() throws InterruptedException, IOException;
-
 
 }

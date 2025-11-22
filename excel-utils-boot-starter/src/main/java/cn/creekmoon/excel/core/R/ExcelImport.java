@@ -5,7 +5,6 @@ import cn.creekmoon.excel.core.R.reader.cell.CellReader;
 import cn.creekmoon.excel.core.R.reader.cell.HutoolCellReader;
 import cn.creekmoon.excel.core.R.reader.title.HutoolTitleReader;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.ExcelFileUtils;
 import cn.hutool.core.io.FileUtil;
@@ -240,9 +239,6 @@ public class ExcelImport {
                 Sheet sheet = workbook.getSheet(reader.sheetName);
                 if (reader instanceof TitleReader<?> titleReader) {
 
-                    //拿上下文状态
-                    TitleReaderResult<?> readerResult = (TitleReaderResult<?>) reader.getReadResult();
-                    
                     // 检查 colIndex2Title 是否已初始化（即是否调用过 read()）
                     if (titleReader.colIndex2Title == null || titleReader.colIndex2Title.isEmpty()) {
                         // Reader 未执行 read() 或 Sheet 不存在，跳过此 Reader
@@ -253,8 +249,13 @@ public class ExcelImport {
                     int titleRowIndex = titleReader.titleRowIndex;
                     Integer lastTitleColumnIndex = titleReader.colIndex2Title.keySet().stream().max(Integer::compareTo).get();
                     int msgTitleColumnIndex = lastTitleColumnIndex + 1;
-                    Integer dataFirstRowIndex = readerResult.getDataFirstRowIndex();
-                    Integer dataLatestRowIndex = readerResult.getDataLatestRowIndex();
+                    Integer dataFirstRowIndex = titleReader.rowIndex2msg.keySet().stream().min(Integer::compareTo).orElse(null);
+                    Integer dataLatestRowIndex = titleReader.rowIndex2msg.keySet().stream().max(Integer::compareTo).orElse(null);
+
+                    // 添加空值检查
+                    if (dataFirstRowIndex == null || dataLatestRowIndex == null) {
+                        continue;
+                    }
 
                     // 开始写结果行
                     CellStyle titleCellStyle = sheet.getRow(titleRowIndex).getCell(lastTitleColumnIndex).getCellStyle();
@@ -265,7 +266,7 @@ public class ExcelImport {
                     // 设置导入结果内容
                     for (Integer rowIndex = dataFirstRowIndex; rowIndex <= dataLatestRowIndex; rowIndex++) {
                         Cell cell = sheet.getRow(rowIndex).createCell(msgTitleColumnIndex);
-                        cell.setCellValue(readerResult.getResultMsg(rowIndex));
+                        cell.setCellValue(titleReader.rowIndex2msg.get(rowIndex));
                     }
                 }
             }

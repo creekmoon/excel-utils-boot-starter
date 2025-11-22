@@ -3,9 +3,6 @@ package cn.creekmoon.excel.core.R.reader.cell;
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
-import cn.creekmoon.excel.core.R.readerResult.ReaderResult;
-import cn.creekmoon.excel.core.R.readerResult.cell.CellReaderResult;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.ExcelCellUtils;
 import cn.creekmoon.excel.util.exception.CheckedExcelException;
 import cn.creekmoon.excel.util.exception.ExConsumer;
@@ -19,7 +16,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.CellStyle;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,7 +31,6 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
     public HutoolCellReader(ExcelImport parent, String sheetRid, String sheetName, Supplier newObjectSupplier) {
         super(parent);
-        super.readerResult = new CellReaderResult();
         super.sheetRid = sheetRid;
         super.sheetName = sheetName;
         super.newObjectSupplier = newObjectSupplier;
@@ -108,17 +103,20 @@ public class HutoolCellReader<R> extends CellReader<R> {
     }
 
     @Override
-    public ReaderResult<R> read(ExConsumer<R> consumer) throws Exception {
-        return read().consume(consumer);
+    public R read(ExConsumer<R> consumer) throws Exception {
+        R result = read();
+        if (result != null && consumer != null) {
+            consumer.accept(result);
+        }
+        return result;
     }
 
 
     @Override
-    public ReaderResult<R> read() throws InterruptedException, IOException {
+    public R read() throws InterruptedException, IOException {
 
         //新版读取 使用SAX读取模式
         ExcelUtilsConfig.importParallelSemaphore.acquire();
-        getReadResult().readStartTime = LocalDateTime.now();
         try {
             /*模版一致性检查:  获取声明的所有CELL, 接下来如果读取到cell就会移除, 当所有cell命中时说明单元格是一致的.*/
             Set<String> templateConsistencyCheckCells = new HashSet<>();
@@ -146,25 +144,16 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
             /*模版一致性检查失败*/
             if (TEMPLATE_CONSISTENCY_CHECK_ENABLE && !templateConsistencyCheckCells.isEmpty()) {
-                getReadResult().EXISTS_READ_FAIL.set(true);
-                getReadResult().errorCount.incrementAndGet();
-                getReadResult().errorReport.append(StrFormatter.format(TITLE_CHECK_ERROR));
+                EXISTS_READ_FAIL.set(true);
             }
 
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常", e);
         } finally {
-            getReadResult().readSuccessTime = LocalDateTime.now();
             /*释放信号量*/
             ExcelUtilsConfig.importParallelSemaphore.release();
         }
-        return getReadResult();
-    }
-
-
-    @Override
-    public CellReaderResult<R> getReadResult() {
-        return (CellReaderResult) readerResult;
+        return getData();
     }
 
 
@@ -219,13 +208,9 @@ public class HutoolCellReader<R> extends CellReader<R> {
                     }
                     Object apply = cellConverter.apply(cellValue);
                     cellConsumer.accept(currentNewObject, apply);
-                    getReadResult().setData((R) currentNewObject);
+                    setData((R) currentNewObject);
                 } catch (Exception e) {
-                    getReadResult().EXISTS_READ_FAIL.set(true);
-                    getReadResult().errorCount.incrementAndGet();
-                    getReadResult().errorReport.append(StrFormatter.format(CONVERT_FAIL_MSG, ExcelCellUtils.excelIndexToCell((int) rowIndex, colIndex)))
-                            .append(GlobalExceptionMsgManager.getExceptionMsg(e))
-                            .append(";");
+                    EXISTS_READ_FAIL.set(true);
                 }
             }
         });

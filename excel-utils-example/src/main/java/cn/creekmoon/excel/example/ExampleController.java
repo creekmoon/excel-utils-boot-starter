@@ -5,8 +5,6 @@ import cn.creekmoon.excel.core.R.converter.DateConverter;
 import cn.creekmoon.excel.core.R.converter.IntegerConverter;
 import cn.creekmoon.excel.core.R.converter.LocalDateTimeConverter;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
-import cn.creekmoon.excel.core.R.readerResult.ReaderResult;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.core.W.ExcelExport;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
 import cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle;
@@ -111,7 +109,7 @@ public class ExampleController {
         }
         /*读取导入文件*/
         ExcelImport excelImport = ExcelImport.create(file);
-        TitleReaderResult<Student> sheet1 = excelImport.switchSheet(0, Student::new)
+        TitleReader<Student> sheet1 = excelImport.switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
@@ -120,7 +118,7 @@ public class ExampleController {
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
                 .read(x -> log.info(x.toString()));
 
-        TitleReaderResult<Student> sheet2 = excelImport.switchSheet(1, Student::new)
+        TitleReader<Student> sheet2 = excelImport.switchSheet(1, Student::new)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("邮箱", Student::setEmail)
                 .read(x -> {
@@ -158,13 +156,13 @@ public class ExampleController {
 
 
         ExcelImport excelImport = ExcelImport.create(file);
-        ReaderResult<Student> readerResult = excelImport.switchSheetAndUseCellReader(1, Student::new)
+        Student student = excelImport.switchSheetAndUseCellReader(1, Student::new)
                 .addConvertAndMustExist("A1", Student::setUserName)
                 .read(x -> {
                     log.info(x.toString());
                 });
 
-        System.out.println("readerResult.getErrorReport() = " + readerResult.errorReport);
+        log.info("读取到的学生数据: {}", student);
         excelImport.response(response);
 
     }
@@ -242,7 +240,7 @@ public class ExampleController {
         ExcelImport excelImport = ExcelImport.create(file);
 
         /*示例1: 只读取前20行数据*/
-        TitleReaderResult<Student> sheet1 = excelImport.switchSheet(0, Student::new)
+        TitleReader<Student> sheet1 = excelImport.switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
@@ -251,7 +249,7 @@ public class ExampleController {
                 .read(x -> log.info("Sheet1数据: {}", x.toString()));
 
         /*示例2: 从第5行开始读取标题和数据*/
-        TitleReaderResult<Student> sheet2 = excelImport.switchSheet(1, Student::new)
+        TitleReader<Student> sheet2 = excelImport.switchSheet(1, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
@@ -410,8 +408,7 @@ public class ExampleController {
 
         ExcelImport excelImport = ExcelImport.create(file);
         excelImport.debugger = true;  // 🔍 开启debug模式，查看详细的读取过程
-        TitleReaderResult<Student> result = excelImport.switchSheet(0, Student::new)
-                .disableDataMemoryCache()  // 🔑 关键：禁用数据内存缓存
+        TitleReader<Student> result = excelImport.switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
