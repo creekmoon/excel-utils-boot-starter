@@ -369,5 +369,102 @@ public class ExampleController {
         excelExport.response(response);
     }
 
+    /**
+     * 大数据量导入场景 - 使用 disableDataMemoryCache() 优化内存占用
+     *
+     * 场景说明：
+     * - 当导入10万+行数据时，默认会将所有数据对象缓存到内存中（用于结果报告和后续消费）
+     * - 如果只需要流式处理数据（边读边保存），不需要缓存所有数据对象
+     * - 调用 disableDataMemoryCache() 可以显著降低内存占用
+     *
+     * @param file Excel文件
+     * @param response 响应
+     * @throws Exception 异常
+     */
+    @PostMapping(value = "/importExcelWithDisableCache")
+    @Operation(summary = "大数据量导入(禁用数据缓存优化内存)")
+    public void importExcelWithDisableCache(MultipartFile file, HttpServletResponse response) throws Exception {
+        // 如果没有上传文件，使用测试文件（20万行数据）
+        if (file == null) {
+            file = new MockMultipartFile(
+                    "导入测试20万行.xlsx",
+                    "导入测试20万行.xlsx",
+                    "application/vnd.ms-excel",
+                    new org.springframework.core.io.ClassPathResource("导入测试20万行.xlsx").getInputStream()
+            );
+        }
+
+        log.info("========== 开始大数据量导入（20万行数据） ==========");
+
+        /*
+         * 示例1: 优化方式（禁用缓存）- 推荐用于大数据量场景
+         * 适用场景：
+         * - 数据量很大（10万+行）
+         * - 只需要流式处理数据，不需要 getAll() 或后续批量消费
+         * - 关注内存占用
+         */
+        log.info("---------- 示例1: 优化方式（禁用缓存，处理20万行数据） ----------");
+
+        long startTime = System.currentTimeMillis();
+        int[] counter = {0}; // 使用数组以便在lambda中修改
+
+        ExcelImport excelImport = ExcelImport.create(file);
+        excelImport.debugger = true;  // 🔍 开启debug模式，查看详细的读取过程
+        TitleReaderResult<Student> result = excelImport.switchSheet(0, Student::new)
+                .disableDataMemoryCache()  // 🔑 关键：禁用数据内存缓存
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .range(1)
+                .read(student -> {
+                    // 流式消费：边读边处理（推荐方式）
+                    counter[0]++;
+
+                    // 每处理1万条打印一次进度
+                    if (counter[0] % 10000 == 0) {
+                        log.info("已处理 {} 条数据，当前用户名: {}", counter[0], student.getUserName());
+                    }
+
+                    // 实际应用中可以在这里保存到数据库
+                    // studentService.save(student);
+
+                    // 或者批量保存（每1000条保存一次）
+                    // if (batchList.size() >= 1000) {
+                    //     studentService.batchSave(batchList);
+                    //     batchList.clear();
+                    // }
+                });
+
+        long endTime = System.currentTimeMillis();
+
+        // 禁用缓存后，getAll() 返回空列表（节省内存）
+        log.info("优化方式: 缓存了 {} 条数据对象（已禁用缓存）", result.getAll().size());
+        log.info("实际处理了 {} 条数据", counter[0]);
+        log.info("处理耗时: {} 毫秒 (约 {} 秒)", (endTime - startTime), (endTime - startTime) / 1000);
+
+        /*
+         * 注意事项：
+         * 1. 禁用缓存后，仍然保留错误信息缓存（rowIndex2msg），可以生成验证结果文件
+         * 2. 禁用缓存后，getAll() 返回空列表
+         * 3. 禁用缓存后，consume() 在 read() 之后调用将无效（应该使用 read(consumer) 流式消费）
+         * 4. 禁用缓存后，setResultMsg(data, msg) 无法通过对象反查行号（应使用 setResultMsg(rowIndex, msg)）
+         * 5. 对于20万行数据，禁用缓存可以节省大量内存（约几百MB到1GB+）
+         */
+
+        /*
+         * 示例2: 生成验证结果文件（不受禁用缓存影响）
+         * generateResultFile() 依赖的是 rowIndex2msg（错误信息），而非 rowIndex2dataBiMap（数据对象）
+         * 因此即使禁用数据缓存，仍然可以正常生成导入结果文件
+         */
+        log.info("---------- 示例2: 生成验证结果文件（不受禁用缓存影响） ----------");
+        excelImport.response(response);
+
+        log.info("========== 大数据量导入完成 ==========");
+        log.info("提示：启用缓存和禁用缓存的内存占用差异在数据量越大时越明显");
+        log.info("建议：10万+行数据时使用 disableDataMemoryCache() 优化内存");
+    }
 
 }
