@@ -1,6 +1,6 @@
 package cn.creekmoon.excel.core;
 
-import cn.creekmoon.excel.util.exception.ExcelUtilsExceptionHandler;
+import cn.creekmoon.excel.util.exception.CustomExceptionHandler;
 import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
 import lombok.Data;
 
@@ -25,12 +25,12 @@ public class ExcelUtilsConfig {
     public static int TEMP_FILE_LIFE_MINUTES = 5;
 
 
-    public static void addExcelUtilsExceptionHandler(ExcelUtilsExceptionHandler... handlers) {
+    public static void addExcelUtilsExceptionHandler(CustomExceptionHandler... handlers) {
         if (handlers == null || handlers.length == 0) {
             return;
         }
         GlobalExceptionMsgManager.excelUtilsExceptionHandlers.addAll(Arrays.asList(handlers));
-        GlobalExceptionMsgManager.excelUtilsExceptionHandlers.sort(Comparator.comparing(ExcelUtilsExceptionHandler::getOrder));
+        GlobalExceptionMsgManager.excelUtilsExceptionHandlers.sort(Comparator.comparing(CustomExceptionHandler::getOrder));
     }
 
 }

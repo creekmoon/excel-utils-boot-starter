@@ -31,19 +31,19 @@ public abstract class TitleWriter<R> extends Writer {
     protected HashMap<Integer, List<Title>> depth2Titles = new HashMap<>();
 
     /**
-     * 标题行号 这里是0,意味着第一行是标题
+     * 标题行号（使用 Integer 支持 null 判断，null 表示未设置，将使用默认值 0）
      */
-    protected int titleRowIndex = 0;
+    protected Integer titleRowIndex = null;
 
     /**
-     * 首行数据行号
+     * 首行数据行号（使用 Integer 支持 null 判断，null 表示未设置，将在 initTitles 时根据表头深度自动推断）
      */
-    protected int firstRowIndex = titleRowIndex + 1;
+    protected Integer firstRowIndex = null;
 
     /**
-     * 末行数据行号
+     * 末行数据行号（使用 Integer 支持 null 判断，null 表示未设置，将使用默认值 Integer.MAX_VALUE）
      */
-    protected int latestRowIndex = Integer.MAX_VALUE;
+    protected Integer latestRowIndex = null;
 
 
     /**
@@ -69,6 +69,8 @@ public abstract class TitleWriter<R> extends Writer {
     }
 
 
+    public abstract <T> HutoolTitleWriter<T> reset(Class<T> newDataClass, int rowIndexOffset);
+
     public abstract int countTitles();
 
     abstract protected void doWrite(List<R> data);
@@ -81,8 +83,7 @@ public abstract class TitleWriter<R> extends Writer {
 
     /**
      * 重置写入器以支持在同一个sheet中写入不同类型的表格
-     * 新的写入器会自动从当前位置的下一行开始（留1行空白）
-     * 可以通过 range() 方法重新指定写入位置
+     * 新的写入器会自动从当前位置的下一行开始
      *
      * @param newDataClass 新表格的数据类型
      * @param <T> 新的数据类型

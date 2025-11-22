@@ -1,7 +1,6 @@
 package cn.creekmoon.excel.core.R.reader;
 
 import cn.creekmoon.excel.core.R.ExcelImport;
-import cn.creekmoon.excel.core.R.readerResult.ReaderResult;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import lombok.Getter;
 
@@ -18,26 +17,17 @@ public abstract class Reader<R> {
     @Getter
     ExcelImport parent;
 
-    public ReaderResult readerResult;
-
     public Supplier newObjectSupplier;
 
-    public int sheetIndex;
+    /**
+     * Sheet的rId（Excel内部关系ID，稳定可靠）
+     */
+    public String sheetRid;
 
-    /*启用模板一致性检查 为了防止模板导入错误*/
-    public boolean TEMPLATE_CONSISTENCY_CHECK_ENABLE = true;
-
-    /*标志位, 模板一致性检查已经失败 */
-    public boolean TEMPLATE_CONSISTENCY_CHECK_FAILED = false;
-
-
-    public abstract Integer getSheetIndex();
-
-    public abstract ReaderResult getReadResult();
-
-    public abstract ReaderResult<R> read(ExConsumer<R> consumer) throws Exception;
-
-    public abstract ReaderResult<R> read() throws InterruptedException, IOException;
+    /**
+     * Sheet的名称
+     */
+    public String sheetName;
 
 
 }

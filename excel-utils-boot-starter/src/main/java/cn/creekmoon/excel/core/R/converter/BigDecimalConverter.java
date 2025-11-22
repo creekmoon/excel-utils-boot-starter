@@ -15,7 +15,9 @@ public class BigDecimalConverter {
      * @return
      */
     public static BigDecimal parse(String str) {
-        str = str.replaceAll(",", "");
+        if (str.contains(",")) {
+            str = str.replaceAll(",", "");
+        }
         return new BigDecimal(str);
     }
 }

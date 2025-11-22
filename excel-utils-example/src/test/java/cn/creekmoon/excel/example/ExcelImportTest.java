@@ -5,7 +5,6 @@ import cn.creekmoon.excel.core.R.converter.DateConverter;
 import cn.creekmoon.excel.core.R.converter.IntegerConverter;
 import cn.creekmoon.excel.core.R.converter.LocalDateTimeConverter;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.ExcelFileUtils;
 import cn.hutool.core.io.FileUtil;
@@ -29,7 +28,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -104,7 +102,7 @@ class ExcelImportTest {
 
         /*第一个sheet导入测试*/
         ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
-        TitleReaderResult read = excelImport
+        TitleReader<Student> read = excelImport
                 .switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
@@ -119,19 +117,15 @@ class ExcelImportTest {
         Assertions.assertEquals(1000, count.get());
 
         /*第二个sheet导入测试*/
-        TitleReaderResult<Student> sheetResult1 = excelImport.switchSheet(1, Student::new)
+        List<Student> students = excelImport.switchSheet(1, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .read();
-        List<Student> students = sheetResult1.getAll();
+                .getAll();
         Assertions.assertEquals(4, students.size());
-        for (Student student : students) {
-            sheetResult1.setResultMsg(student, ExcelConstants.IMPORT_SUCCESS_MSG);
-        }
 
         //检查临时文件是否能够正常生成和清理
         File file = excelImport.generateResultFile();
@@ -165,13 +159,10 @@ class ExcelImportTest {
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
-        List<Student> students = studentSheetReader.read().getAll();
+        List<Student> students = studentSheetReader.getAll();
 
         /*检查是否能够正确读取*/
-        Assertions.assertEquals(studentSheetReader.getSheetRowCount(), 1001L);
-
-        /*检查是否能够正确读取*/
-        Assertions.assertEquals(students.size(), 2);
+        Assertions.assertEquals(2, students.size());
     }
 
 
@@ -195,7 +186,7 @@ class ExcelImportTest {
                 .switchSheetAndUseCellReader(0, Student::new)
                 .addConvert("B1", Student::setUserName)
                 .addConvert("D1", Student::setFullName)
-                .addConvert(0,  5, IntegerConverter::parse, Student::setAge)
+                .addConvert(0, 5, IntegerConverter::parse, Student::setAge)
                 .read(sheet1::set);
         Assertions.assertEquals(sheet1.get().getUserName(), "李二狗");
         Assertions.assertEquals(sheet1.get().getFullName(), "李云龙");
@@ -224,7 +215,6 @@ class ExcelImportTest {
     }
 
 
-
     @Test
     void importTest() throws IOException, InterruptedException {
         /*读取导入文件*/
@@ -233,15 +223,16 @@ class ExcelImportTest {
         MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
 
         ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
-        TitleReaderResult<Student> read = excelImport.switchSheet(0, Student::new)
+        TitleReader<Student> read = excelImport.switchSheet(0, Student::new);
+        List<Student> dataList  = read
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .read();
-        List<Student> dataList = read.getAll();
+                .getAll();
+
         // 数据从第二行开始, 而索引下标从0开始, 所以需要都-2
         assertEquals(88, dataList.get(6 - 2).age, "第6行数据年龄为88");
         assertEquals("poxo0", dataList.get(80 - 2).getUserName(), "第80行数据用户名是poxo0");
@@ -250,8 +241,8 @@ class ExcelImportTest {
         assertEquals("j94rk", dataList.get(631 - 2).getFullName(), "第631行数据全名是j94rk");
         //全部数据有1000条
         assertEquals(1000, dataList.size(), "全部数据有1000条");
-        assertEquals(1, read.getDataFirstRowIndex(), "数据起始行下标预期为1");
-        assertEquals(1000, read.getDataLatestRowIndex(), "数据结束行下标预期为1000");
+        assertEquals(1, read.rowIndex2msg.keySet().stream().min(Integer::compareTo).get(), "数据起始行下标预期为1");
+        assertEquals(1000, read.rowIndex2msg.keySet().stream().max(Integer::compareTo).get(), "数据结束行下标预期为1000");
 
         long countAgeLg60 = dataList
                 .stream()
@@ -271,16 +262,16 @@ class ExcelImportTest {
         MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
 
         ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
-        TitleReaderResult<Student> sheet1 = excelImport.switchSheet(0, Student::new)
+        excelImport.switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .read();
+                .getAll();
 
-        TitleReaderResult sheet2 = excelImport.switchSheet(1, Student::new)
+        TitleReader<Student> sheet2 = excelImport.switchSheet(1, Student::new)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("邮箱", Student::setEmail)
                 .read(x -> {
@@ -289,11 +280,11 @@ class ExcelImportTest {
                         throw new RuntimeException("错误!");
                     }
                 });
-        assertEquals(1, sheet2.getErrorCount().get(), "预期发生一个错误");
-        //预期持续读取时间大于等于1秒
-        log.info("ReadStartTime = {} ", sheet2.readStartTime);
-        log.info("ConsumeSuccessTime() = {} ", sheet2.consumeSuccessTime);
-        assertTrue(ChronoUnit.SECONDS.between(sheet2.readStartTime, sheet2.consumeSuccessTime) >= 2, "预期持续读取时间大于等于2秒");
+        // 验证错误信息已记录
+        long errorCount = sheet2.rowIndex2msg.values().stream()
+                .filter(msg -> !ExcelConstants.IMPORT_SUCCESS_MSG.equals(msg))
+                .count();
+        assertEquals(1, errorCount, "预期发生一个错误");
 
         File file = excelImport.generateResultFile();
         assertTrue(FileUtil.exist(file), "文件预期应该正常生成");

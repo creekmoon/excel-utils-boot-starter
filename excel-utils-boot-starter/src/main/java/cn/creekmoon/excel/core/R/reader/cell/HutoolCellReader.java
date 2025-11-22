@@ -3,14 +3,10 @@ package cn.creekmoon.excel.core.R.reader.cell;
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
-import cn.creekmoon.excel.core.R.readerResult.ReaderResult;
-import cn.creekmoon.excel.core.R.readerResult.cell.CellReaderResult;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.ExcelCellUtils;
 import cn.creekmoon.excel.util.exception.CheckedExcelException;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
-import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
@@ -19,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.CellStyle;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,10 +28,10 @@ import static cn.creekmoon.excel.util.ExcelConstants.*;
 public class HutoolCellReader<R> extends CellReader<R> {
 
 
-    public HutoolCellReader(ExcelImport parent, Integer sheetIndex, Supplier newObjectSupplier) {
+    public HutoolCellReader(ExcelImport parent, String sheetRid, String sheetName, Supplier newObjectSupplier) {
         super(parent);
-        super.readerResult = new CellReaderResult();
-        super.sheetIndex = sheetIndex;
+        super.sheetRid = sheetRid;
+        super.sheetName = sheetName;
         super.newObjectSupplier = newObjectSupplier;
     }
 
@@ -107,53 +102,43 @@ public class HutoolCellReader<R> extends CellReader<R> {
     }
 
     @Override
-    public ReaderResult<R> read(ExConsumer<R> consumer) throws Exception {
-        return read().consume(consumer);
+    public R read(ExConsumer<R> consumer) throws Exception {
+        R result = read();
+        if (result != null && consumer != null) {
+            consumer.accept(result);
+        }
+        return result;
     }
 
 
     @Override
-    public ReaderResult<R> read() throws InterruptedException, IOException {
+    public R read() throws InterruptedException, IOException {
 
         //新版读取 使用SAX读取模式
         ExcelUtilsConfig.importParallelSemaphore.acquire();
-        getReadResult().readStartTime = LocalDateTime.now();
         try {
             /*模版一致性检查:  获取声明的所有CELL, 接下来如果读取到cell就会移除, 当所有cell命中时说明单元格是一致的.*/
             Set<String> templateConsistencyCheckCells = new HashSet<>();
-            if (TEMPLATE_CONSISTENCY_CHECK_ENABLE) {
-                cell2setter.forEach((rowIndex, colIndexMap) -> {
-                    colIndexMap.forEach((colIndex, var) -> {
-                        templateConsistencyCheckCells.add(ExcelCellUtils.excelIndexToCell(rowIndex, colIndex));
-                    });
-                });
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] 开始读取sheet: rId={}, sheetName={}",
+                        sheetRid, sheetName);
             }
-
             Excel07SaxReader excel07SaxReader = initSaxReader(templateConsistencyCheckCells);
-            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
-            excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), -1);
+            /*第一个参数 文件流  第二个参数 sheetRid 直接定位到指定sheet*/
+            excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), getParent().rid2SheetNameBiMap.get(sheetRid));
 
-            /*模版一致性检查失败*/
-            if (TEMPLATE_CONSISTENCY_CHECK_ENABLE && !templateConsistencyCheckCells.isEmpty()) {
-                getReadResult().EXISTS_READ_FAIL.set(true);
-                getReadResult().errorCount.incrementAndGet();
-                getReadResult().errorReport.append(StrFormatter.format(TITLE_CHECK_ERROR));
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] Sheet读取完成: rId={}, sheetName={}",
+                        sheetRid, sheetName);
             }
 
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常", e);
         } finally {
-            getReadResult().readSuccessTime = LocalDateTime.now();
             /*释放信号量*/
             ExcelUtilsConfig.importParallelSemaphore.release();
         }
-        return getReadResult();
-    }
-
-
-    @Override
-    public CellReaderResult<R> getReadResult() {
-        return (CellReaderResult) readerResult;
+        return getData();
     }
 
 
@@ -165,14 +150,11 @@ public class HutoolCellReader<R> extends CellReader<R> {
      * @retur
      */
     Excel07SaxReader initSaxReader(Set<String> templateConsistencyCheckCells) {
-        Integer targetSheetIndex = sheetIndex;
         currentNewObject = newObjectSupplier.get();
 
 
         /*返回一个Sax读取器*/
         return new Excel07SaxReader(new RowHandler() {
-            int currentSheetIndex = 0;
-
 
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
@@ -181,13 +163,8 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
             @Override
             public void handleCell(int sheetIndex, long rowIndex, int cellIndex, Object value, CellStyle xssfCellStyle) {
-                currentSheetIndex = sheetIndex;
-
+                // 由于已通过rId精准定位sheet，无需在回调中过滤
                 int colIndex = cellIndex;
-
-                if (targetSheetIndex != currentSheetIndex) {
-                    return;
-                }
 
                 /*解析单个单元格*/
                 if (cell2setter.size() <= 0
@@ -216,20 +193,12 @@ public class HutoolCellReader<R> extends CellReader<R> {
                     }
                     Object apply = cellConverter.apply(cellValue);
                     cellConsumer.accept(currentNewObject, apply);
-                    getReadResult().setData((R) currentNewObject);
+                    setData((R) currentNewObject);
                 } catch (Exception e) {
-                    getReadResult().EXISTS_READ_FAIL.set(true);
-                    getReadResult().errorCount.incrementAndGet();
-                    getReadResult().errorReport.append(StrFormatter.format(CONVERT_FAIL_MSG, ExcelCellUtils.excelIndexToCell((int) rowIndex, colIndex)))
-                            .append(GlobalExceptionMsgManager.getExceptionMsg(e))
-                            .append(";");
+                    EXISTS_READ_FAIL.set(true);
                 }
             }
         });
     }
 
-    @Override
-    public Integer getSheetIndex() {
-        return getParent().sheetIndex2ReaderBiMap.getKey(this);
-    }
 }

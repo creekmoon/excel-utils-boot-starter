@@ -5,7 +5,6 @@ import cn.creekmoon.excel.core.R.reader.cell.CellReader;
 import cn.creekmoon.excel.core.R.reader.cell.HutoolCellReader;
 import cn.creekmoon.excel.core.R.reader.title.HutoolTitleReader;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
-import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.ExcelFileUtils;
 import cn.hutool.core.io.FileUtil;
@@ -19,6 +18,9 @@ import cn.hutool.poi.excel.ExcelUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackagePart;
+import org.apache.poi.openxml4j.opc.PackageRelationship;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -26,13 +28,14 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.HashMap;
-import java.util.Iterator;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.*;
+import java.util.*;
 import java.util.function.Supplier;
 
 /**
@@ -42,9 +45,18 @@ import java.util.function.Supplier;
 @Slf4j
 public class ExcelImport {
 
-    public BiMap<Integer, Reader> sheetIndex2ReaderBiMap = new BiMap<>(new HashMap<>());
+    public ArrayList<Reader> allReaders = new ArrayList<>();
 
+    /**
+     * Sheet的rId和SheetName的双向映射
+     * 该映射基于Excel文件的workbook.xml解析，保证有序且稳定
+     */
+    public BiMap<String, String> rid2SheetNameBiMap;
 
+    /**
+     * 打印调试内容
+     */
+    public boolean debugger = false;
     /*唯一识别名称 会同步生成一份文件到临时目录*/
     public String taskId = UUID.fastUUID().toString();
     String resultFilePath = ExcelFileUtils.generateXlsxAbsoluteFilePath(taskId);
@@ -58,9 +70,17 @@ public class ExcelImport {
 
 
     public static ExcelImport create(MultipartFile file) throws IOException {
+        return create(file, false);
+    }
+
+
+    public static ExcelImport create(MultipartFile file, boolean debugger) throws IOException {
         ExcelImport excelImport = new ExcelImport();
         excelImport.sourceFile = file;
+        excelImport.debugger = debugger;
         excelImport.csvSupport();
+        // 解析Excel文件的sheet映射关系（rId ↔ SheetName）
+        excelImport.rid2SheetNameBiMap = excelImport.parseSheetMappings();
 
         return excelImport;
     }
@@ -75,21 +95,29 @@ public class ExcelImport {
      * @return
      */
     public <T> TitleReader<T> switchSheet(int sheetIndex, Supplier<T> supplier) {
-        if (supplier.get()==supplier.get()) {
+        if (supplier.get() == supplier.get()) {
             throw new RuntimeException("导出的对象不支持重写 equal() 方法. 请勿使用@Data注解!");
-        }
-        if (supplier.get()==supplier.get()) {
-            throw new RuntimeException("导出的对象不支持重写 equal() 方法. 请勿使用@Data注解!");
-        }
-        //如果已经存在读取器
-        TitleReader sheetReader = (TitleReader) this.sheetIndex2ReaderBiMap.get(sheetIndex);
-        if (sheetReader != null) {
-            return sheetReader;
         }
 
-        //新增读取器
-        HutoolTitleReader<T> reader = new HutoolTitleReader<>(this, sheetIndex, supplier);
-        this.sheetIndex2ReaderBiMap.put(sheetIndex, reader);
+        // 从有序BiMap中获取第sheetIndex个entry的rId和sheetName
+        List<String> ridList = new ArrayList<>(rid2SheetNameBiMap.keySet());
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheet] 请求sheetIndex={}, 可用的rId列表: {}", sheetIndex, ridList);
+        }
+        if (sheetIndex < 0 || sheetIndex >= ridList.size()) {
+            throw new RuntimeException("Sheet index out of bounds: " + sheetIndex + ", available sheets: " + ridList.size());
+        }
+        String rId = ridList.get(sheetIndex);
+        String sheetName = rid2SheetNameBiMap.get(rId);
+
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheet] 选择的sheet: index={}, rId={}, sheetName={}",
+                    sheetIndex, rId, sheetName);
+        }
+
+        //新增读取器，传递rId和sheetName
+        HutoolTitleReader<T> reader = new HutoolTitleReader<>(this, rId, sheetName, supplier);
+        this.allReaders.add(reader);
         return reader;
     }
 
@@ -103,15 +131,26 @@ public class ExcelImport {
      * @return
      */
     public <T> CellReader<T> switchSheetAndUseCellReader(int sheetIndex, Supplier<T> supplier) {
-        //如果已经存在读取器
-        CellReader sheetReader = (CellReader) this.sheetIndex2ReaderBiMap.get(sheetIndex);
-        if (sheetReader != null) {
-            return sheetReader;
+
+        // 从有序BiMap中获取第sheetIndex个entry的rId和sheetName
+        List<String> ridList = new ArrayList<>(rid2SheetNameBiMap.keySet());
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheetAndUseCellReader] 请求sheetIndex={}, 可用的rId列表: {}", sheetIndex, ridList);
+        }
+        if (sheetIndex < 0 || sheetIndex >= ridList.size()) {
+            throw new RuntimeException("Sheet index out of bounds: " + sheetIndex + ", available sheets: " + ridList.size());
+        }
+        String rId = ridList.get(sheetIndex);
+        String sheetName = rid2SheetNameBiMap.get(rId);
+
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheetAndUseCellReader] 选择的sheet: index={}, rId={}, sheetName={}",
+                    sheetIndex, rId, sheetName);
         }
 
-        //新增读取器
-        HutoolCellReader<T> reader = new HutoolCellReader<>(this, sheetIndex, supplier);
-        this.sheetIndex2ReaderBiMap.put(sheetIndex, reader);
+        //新增读取器，传递rId和sheetName
+        HutoolCellReader<T> reader = new HutoolCellReader<>(this, rId, sheetName, supplier);
+        this.allReaders.add(reader);
         return reader;
     }
 
@@ -154,11 +193,7 @@ public class ExcelImport {
 
     public ExcelImport response(HttpServletResponse response) throws IOException {
         File file = generateResultFile();
-//        IoUtil.copy(sourceFile.getInputStream(), FileUtil.getOutputStream(ExcelFileUtils.getAbsoluteFilePath(this.taskId)));
-//        File file = FileUtil.file(ExcelFileUtils.getAbsoluteFilePath(this.taskId));
-//        System.out.println("file.canRead() = " + file.canRead());
-//        System.out.println("file.canWrite() = " + file.canWrite());
-        ExcelFileUtils.response(ExcelFileUtils.generateXlsxAbsoluteFilePath(this.taskId), taskId + ".xlsx", response);
+        ExcelFileUtils.response(file, taskId + ".xlsx", response);
         return this;
     }
 
@@ -184,26 +219,27 @@ public class ExcelImport {
 
         try (Workbook workbook = new XSSFWorkbook(sourceFile.getInputStream());
              BufferedOutputStream outputStream = FileUtil.getOutputStream(absoluteFilePath)) {
-            for (Integer targetSheetIndex : sheetIndex2ReaderBiMap.keySet()) {
-                Sheet sheet = workbook.getSheetAt(targetSheetIndex);
-                Reader<?> reader = sheetIndex2ReaderBiMap.get(targetSheetIndex);
+            for (Reader<?> reader : allReaders) {
+                Sheet sheet = workbook.getSheet(reader.sheetName);
                 if (reader instanceof TitleReader<?> titleReader) {
 
-                    //拿上下文状态
-                    TitleReaderResult<?> readerResult = (TitleReaderResult<?>) reader.getReadResult();
-                    
                     // 检查 colIndex2Title 是否已初始化（即是否调用过 read()）
                     if (titleReader.colIndex2Title == null || titleReader.colIndex2Title.isEmpty()) {
                         // Reader 未执行 read() 或 Sheet 不存在，跳过此 Reader
                         continue;
                     }
-                    
+
                     // 推算准备要写的位置
                     int titleRowIndex = titleReader.titleRowIndex;
                     Integer lastTitleColumnIndex = titleReader.colIndex2Title.keySet().stream().max(Integer::compareTo).get();
                     int msgTitleColumnIndex = lastTitleColumnIndex + 1;
-                    Integer dataFirstRowIndex = readerResult.getDataFirstRowIndex();
-                    Integer dataLatestRowIndex = readerResult.getDataLatestRowIndex();
+                    Integer dataFirstRowIndex = titleReader.rowIndex2msg.keySet().stream().min(Integer::compareTo).orElse(null);
+                    Integer dataLatestRowIndex = titleReader.rowIndex2msg.keySet().stream().max(Integer::compareTo).orElse(null);
+
+                    // 添加空值检查
+                    if (dataFirstRowIndex == null || dataLatestRowIndex == null) {
+                        continue;
+                    }
 
                     // 开始写结果行
                     CellStyle titleCellStyle = sheet.getRow(titleRowIndex).getCell(lastTitleColumnIndex).getCellStyle();
@@ -214,7 +250,7 @@ public class ExcelImport {
                     // 设置导入结果内容
                     for (Integer rowIndex = dataFirstRowIndex; rowIndex <= dataLatestRowIndex; rowIndex++) {
                         Cell cell = sheet.getRow(rowIndex).createCell(msgTitleColumnIndex);
-                        cell.setCellValue(readerResult.getResultMsg(rowIndex));
+                        cell.setCellValue(titleReader.rowIndex2msg.get(rowIndex));
                     }
                 }
             }
@@ -224,4 +260,81 @@ public class ExcelImport {
         return FileUtil.file(absoluteFilePath);
     }
 
+    /**
+     * 解析Excel文件的workbook.xml，构建rId ↔ SheetName的双向映射
+     * 使用POI Package API进行轻量级解析，不加载完整workbook
+     *
+     * @return rId ↔ SheetName 的双向映射表（有序）
+     */
+    private BiMap<String, String> parseSheetMappings() {
+        BiMap<String, String> result = new BiMap<>(new LinkedHashMap<>());
+
+        try {
+            if (debugger) {
+                log.info("[DEBUGGER][ExcelImport.parseSheetMappings] 开始解析workbook.xml");
+            }
+
+            // 使用POI Package API打开Excel文件（ZIP格式）
+            try (OPCPackage pkg = OPCPackage.open(sourceFile.getInputStream())) {
+                // 获取workbook part
+                PackageRelationship workbookRel = pkg.getRelationshipsByType(
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+                ).getRelationship(0);
+
+                PackagePart workbookPart = pkg.getPart(workbookRel);
+
+                // 解析workbook.xml
+                try (InputStream workbookStream = workbookPart.getInputStream()) {
+                    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                    factory.setNamespaceAware(true);
+                    DocumentBuilder builder = factory.newDocumentBuilder();
+                    Document doc = builder.parse(workbookStream);
+
+                    // 获取所有sheet节点（按XML顺序即为显示顺序）
+                    NodeList sheetNodes = doc.getElementsByTagName("sheet");
+
+                    for (int i = 0; i < sheetNodes.getLength(); i++) {
+                        Element sheetElement = (Element) sheetNodes.item(i);
+
+                        // 获取r:id属性（可能在不同命名空间）
+                        String rid = sheetElement.getAttribute("r:id");
+                        if (rid == null || rid.isEmpty()) {
+                            rid = sheetElement.getAttributeNS(
+                                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+                                    "id"
+                            );
+                        }
+
+                        String sheetName = sheetElement.getAttribute("name");
+
+                        if (rid != null && !rid.isEmpty() && sheetName != null && !sheetName.isEmpty()) {
+                            result.put(rid, sheetName);
+
+                            if (debugger) {
+                                log.info("[DEBUGGER][ExcelImport.parseSheetMappings] 解析Sheet: index={}, name={}, rid={}",
+                                        i, sheetName, rid);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (debugger) {
+                log.info("[DEBUGGER][ExcelImport.parseSheetMappings] 解析完成: 共{}个sheet", result.size());
+            }
+
+            if (result.isEmpty()) {
+                throw new RuntimeException("[ExcelImport.parseSheetMappings] 无法解析Excel文件的Sheet信息，文件可能损坏");
+            }
+
+        } catch (Exception e) {
+            log.error("[ExcelImport.parseSheetMappings] 解析workbook.xml失败", e);
+            if (debugger) {
+                log.error("[DEBUGGER][ExcelImport.parseSheetMappings] 解析异常详情", e);
+            }
+            throw new RuntimeException("[ExcelImport.parseSheetMappings] 解析Excel文件失败: " + e.getMessage(), e);
+        }
+
+        return result;
+    }
 }
