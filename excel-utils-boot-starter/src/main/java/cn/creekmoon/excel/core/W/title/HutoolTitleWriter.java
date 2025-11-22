@@ -41,6 +41,34 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
     }
 
     /**
+     * 重置写入器以支持在同一个sheet中写入不同类型的表格
+     * 新的写入器会自动从当前位置的下一行开始（留1行空白）
+     * 可以通过 range() 方法重新指定写入位置
+     *
+     * @param newDataClass 新表格的数据类型
+     * @param <T> 新的数据类型
+     * @return 新的 TitleWriter 实例
+     */
+    @Override
+    public <T> HutoolTitleWriter<T> reset(Class<T> newDataClass) {
+        // 创建新的 writer 实例，但共享关键资源
+        HutoolTitleWriter<T> newWriter = new HutoolTitleWriter<>(this.parent, this.sheetIndex, this.sheetName);
+        
+        // 共享 Excel 写入器（关键：确保写入同一个 Excel 文件和 sheet）
+        newWriter.bigExcelWriter = this.bigExcelWriter;
+        
+        // 自动续接位置：从当前写入行的下一行开始（留1行空白作为分隔）
+        newWriter.titleRowIndex = this.currentRow + 1;
+        newWriter.firstRowIndex = this.currentRow + 2;
+        newWriter.latestRowIndex = Integer.MAX_VALUE;
+        
+        // 继承当前行位置
+        newWriter.currentRow = this.currentRow;
+        
+        return newWriter;
+    }
+
+    /**
      * 获取当前的表头数量
      */
     @Override
@@ -135,6 +163,45 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
 //    public TitleWriter<R> setDataStyle(Predicate<R> condition, Consumer<CellStyle> styleInitializer) {
 //        return setDataStyle(titles.size() - 1, condition, styleInitializer);
 //    }
+
+    /**
+     * 增加写入范围限制
+     *
+     * @param titleRowIndex    标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param firstDataRowIndex 首条数据所在的行数(下标按照从0开始)
+     * @param lastDataRowIndex 最后一条数据所在的行数(下标按照从0开始)
+     * @return
+     */
+    @Override
+    public HutoolTitleWriter<R> range(int titleRowIndex, int firstDataRowIndex, int lastDataRowIndex) {
+        this.titleRowIndex = titleRowIndex;
+        this.firstRowIndex = firstDataRowIndex;
+        this.latestRowIndex = lastDataRowIndex;
+        return this;
+    }
+
+    /**
+     * 增加写入范围限制
+     *
+     * @param startRowIndex 标题所在的行数(下标按照从0开始, 如果是第一行则填0)
+     * @param lastRowIndex  最后一条数据所在的行数(下标按照从0开始)
+     * @return
+     */
+    @Override
+    public HutoolTitleWriter<R> range(int startRowIndex, int lastRowIndex) {
+        return range(startRowIndex, startRowIndex + 1, lastRowIndex);
+    }
+
+    /**
+     * 增加写入范围限制
+     *
+     * @param startRowIndex 起始行下标(从0开始)
+     * @return
+     */
+    @Override
+    public HutoolTitleWriter<R> range(int startRowIndex) {
+        return range(startRowIndex, startRowIndex + 1, Integer.MAX_VALUE);
+    }
 
     /**
      * 内部操作类,但是暴露出来了,希望最好不要用这个方法
@@ -306,7 +373,7 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
      * @return
      */
     private Integer getRowsIndexByDepth(int depth) {
-        return MAX_TITLE_DEPTH - depth;
+        return titleRowIndex + MAX_TITLE_DEPTH - depth;
     }
 
 
@@ -347,7 +414,13 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
             getBigExcelWriter().setSheet(sheetName);
         }
 
+        // 设置当前写入位置为标题行位置
+        getBigExcelWriter().setCurrentRow(titleRowIndex);
+
         this.initTitles();
+
+        // 设置当前写入位置为首行数据位置
+        getBigExcelWriter().setCurrentRow(firstRowIndex);
     }
 
     /**
@@ -358,8 +431,21 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
      */
     @Override
     protected void doWrite(List<R> targetDataList) {
+        /* 计算可写入的最大行数 */
+        int currentRowIndex = getBigExcelWriter().getCurrentRow();
+        int maxRows = latestRowIndex - currentRowIndex + 1;
+        
+        /* 如果超过限制，则截断数据 */
+        List<R> dataToWrite = targetDataList;
+        if (maxRows < targetDataList.size() && latestRowIndex != Integer.MAX_VALUE) {
+            dataToWrite = targetDataList.subList(0, Math.max(0, maxRows));
+            if (parent.debugger) {
+                log.info("[Excel构建] 写入范围受限，数据被截断。原始数据行数: {}, 实际写入行数: {}", targetDataList.size(), dataToWrite.size());
+            }
+        }
+        
         /* 分批写,数量上限等于滑动窗口值*/
-        List<List<R>> splitDataList = ListUtil.partition(targetDataList, BigExcelWriter.DEFAULT_WINDOW_SIZE);
+        List<List<R>> splitDataList = ListUtil.partition(dataToWrite, BigExcelWriter.DEFAULT_WINDOW_SIZE);
         for (int i = 0; i < splitDataList.size(); i++) {
 
             /*写数据*/

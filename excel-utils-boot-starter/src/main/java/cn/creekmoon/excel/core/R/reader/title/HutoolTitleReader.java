@@ -40,6 +40,36 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     }
 
     /**
+     * 重置读取器以支持在同一个sheet中读取不同类型的表格
+     * 新的读取器会清空所有转换规则和范围设置
+     * 需要重新调用 addConvert() 和 range() 配置
+     * 
+     * 重要限制：
+     * - Reset 创建的 Reader 不会参与 ExcelImport.generateResultFile() 的结果生成
+     * - 如果需要完整的导入验证结果报告，建议为每个数据类型使用独立的 switchSheet()
+     * - Reset 适用于在同一 Sheet 中读取多个数据区域，但不需要生成统一验证报告的场景
+     *
+     * @param newObjectSupplier 新表格的对象创建器
+     * @param <T> 新的数据类型
+     * @return 新的 TitleReader 实例
+     */
+    @Override
+    public <T> HutoolTitleReader<T> reset(Supplier<T> newObjectSupplier) {
+        // 创建新的 reader 实例
+        HutoolTitleReader<T> newReader = new HutoolTitleReader<>(
+            this.getParent(), 
+            this.sheetIndex, 
+            newObjectSupplier
+        );
+        
+        // 注意：不更新 ExcelImport 的 Map
+        // 这样可以保留第一个（主）Reader 用于生成导入结果文件
+        // Reset 创建的 Reader 只用于临时读取，不参与结果文件生成
+        
+        return newReader;
+    }
+
+    /**
      * 获取SHEET页的总行数
      *
      * @return
@@ -369,7 +399,13 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
 
     @Override
     public Integer getSheetIndex() {
-        return getParent().sheetIndex2ReaderBiMap.getKey(this);
+        // 优先从 Map 中查找（适用于通过 switchSheet 创建的 Reader）
+        Integer index = getParent().sheetIndex2ReaderBiMap.getKey(this);
+        if (index != null) {
+            return index;
+        }
+        // 如果不在 Map 中（通过 reset 创建的 Reader），返回 sheetIndex 字段
+        return this.sheetIndex;
     }
 
     @Override

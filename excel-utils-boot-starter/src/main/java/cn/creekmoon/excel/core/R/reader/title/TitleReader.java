@@ -8,6 +8,7 @@ import cn.creekmoon.excel.util.exception.ExFunction;
 
 import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 
 /**
@@ -80,6 +81,17 @@ public abstract class TitleReader<R> extends Reader<R> {
     abstract public TitleReader<R> range(int startRowIndex);
 
     abstract public Integer getSheetIndex();
+
+    /**
+     * 重置读取器以支持在同一个sheet中读取不同类型的表格
+     * 新的读取器会清空所有转换规则和范围设置
+     * 需要重新调用 addConvert() 和 range() 配置
+     *
+     * @param newObjectSupplier 新表格的对象创建器
+     * @param <T> 新的数据类型
+     * @return 新的 TitleReader 实例
+     */
+    abstract public <T> TitleReader<T> reset(Supplier<T> newObjectSupplier);
 
 
 

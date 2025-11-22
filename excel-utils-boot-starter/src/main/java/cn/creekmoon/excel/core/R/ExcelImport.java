@@ -191,6 +191,13 @@ public class ExcelImport {
 
                     //拿上下文状态
                     TitleReaderResult<?> readerResult = (TitleReaderResult<?>) reader.getReadResult();
+                    
+                    // 检查 colIndex2Title 是否已初始化（即是否调用过 read()）
+                    if (titleReader.colIndex2Title == null || titleReader.colIndex2Title.isEmpty()) {
+                        // Reader 未执行 read() 或 Sheet 不存在，跳过此 Reader
+                        continue;
+                    }
+                    
                     // 推算准备要写的位置
                     int titleRowIndex = titleReader.titleRowIndex;
                     Integer lastTitleColumnIndex = titleReader.colIndex2Title.keySet().stream().max(Integer::compareTo).get();
