@@ -19,11 +19,20 @@ import cn.hutool.poi.excel.ExcelUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.openxml4j.opc.PackagePart;
+import org.apache.poi.openxml4j.opc.PackageRelationship;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,8 +40,11 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -51,6 +63,20 @@ public class ExcelImport {
 
     /*当前导入的文件*/
     public MultipartFile sourceFile;
+
+    /**
+     * 调试模式开关
+     * 设置为 true 时会打印详细的读取过程信息，用于问题诊断
+     */
+    public boolean debugger = false;
+
+    /**
+     * sheetIndex → rid 的映射缓存
+     * 懒加载：首次调用 getSheetRid() 时解析
+     * key: sheetIndex (0-based，对应Excel中可见的sheet顺序)
+     * value: rid (如 "rId1", "rId2"，用于Hutool SAX Reader)
+     */
+    private Map<Integer, String> sheetIndexToRidCache = null;
 
 
     private ExcelImport() {
@@ -75,6 +101,11 @@ public class ExcelImport {
      * @return
      */
     public <T> TitleReader<T> switchSheet(int sheetIndex, Supplier<T> supplier) {
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheet] 切换到Sheet: sheetIndex={}, supplierType={}", 
+                sheetIndex, supplier.get().getClass().getSimpleName());
+        }
+        
         if (supplier.get()==supplier.get()) {
             throw new RuntimeException("导出的对象不支持重写 equal() 方法. 请勿使用@Data注解!");
         }
@@ -84,12 +115,20 @@ public class ExcelImport {
         //如果已经存在读取器
         TitleReader sheetReader = (TitleReader) this.sheetIndex2ReaderBiMap.get(sheetIndex);
         if (sheetReader != null) {
+            if (debugger) {
+                log.info("[DEBUGGER][ExcelImport.switchSheet] 复用已存在的Reader: sheetIndex={}", sheetIndex);
+            }
             return sheetReader;
         }
 
         //新增读取器
         HutoolTitleReader<T> reader = new HutoolTitleReader<>(this, sheetIndex, supplier);
         this.sheetIndex2ReaderBiMap.put(sheetIndex, reader);
+        
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheet] 创建新的HutoolTitleReader: sheetIndex={}", sheetIndex);
+        }
+        
         return reader;
     }
 
@@ -103,15 +142,28 @@ public class ExcelImport {
      * @return
      */
     public <T> CellReader<T> switchSheetAndUseCellReader(int sheetIndex, Supplier<T> supplier) {
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheetAndUseCellReader] 切换到Sheet: sheetIndex={}, supplierType={}", 
+                sheetIndex, supplier.get().getClass().getSimpleName());
+        }
+        
         //如果已经存在读取器
         CellReader sheetReader = (CellReader) this.sheetIndex2ReaderBiMap.get(sheetIndex);
         if (sheetReader != null) {
+            if (debugger) {
+                log.info("[DEBUGGER][ExcelImport.switchSheetAndUseCellReader] 复用已存在的CellReader: sheetIndex={}", sheetIndex);
+            }
             return sheetReader;
         }
 
         //新增读取器
         HutoolCellReader<T> reader = new HutoolCellReader<>(this, sheetIndex, supplier);
         this.sheetIndex2ReaderBiMap.put(sheetIndex, reader);
+        
+        if (debugger) {
+            log.info("[DEBUGGER][ExcelImport.switchSheetAndUseCellReader] 创建新的HutoolCellReader: sheetIndex={}", sheetIndex);
+        }
+        
         return reader;
     }
 
@@ -222,6 +274,107 @@ public class ExcelImport {
             outputStream.flush();
         }
         return FileUtil.file(absoluteFilePath);
+    }
+
+    /**
+     * 获取指定sheetIndex对应的rid
+     * 懒加载：首次调用时解析workbook.xml
+     * 
+     * @param sheetIndex Excel中可见的sheet索引（0-based）
+     * @return rid字符串（如"rId1"），如果不存在或解析失败返回null
+     */
+    public String getSheetRid(int sheetIndex) {
+        // 懒加载：首次调用时解析
+        if (sheetIndexToRidCache == null) {
+            sheetIndexToRidCache = parseSheetMappings();
+        }
+        
+        String rid = sheetIndexToRidCache.get(sheetIndex);
+        
+        if (debugger) {
+            if (rid != null) {
+                log.info("[DEBUGGER][ExcelImport.getSheetRid] Sheet映射: sheetIndex={} → rid={}", sheetIndex, rid);
+            } else {
+                log.warn("[DEBUGGER][ExcelImport.getSheetRid] 未找到映射: sheetIndex={}, 可用映射={}", 
+                    sheetIndex, sheetIndexToRidCache);
+            }
+        }
+        
+        return rid;
+    }
+
+    /**
+     * 解析Excel文件的workbook.xml，构建sheetIndex → rid的映射
+     * 使用POI Package API进行轻量级解析，不加载完整workbook
+     * 
+     * @return sheetIndex → rid 的映射表
+     */
+    private Map<Integer, String> parseSheetMappings() {
+        Map<Integer, String> result = new LinkedHashMap<>();
+        
+        try {
+            if (debugger) {
+                log.info("[DEBUGGER][ExcelImport.parseSheetMappings] 开始解析workbook.xml");
+            }
+            
+            // 使用POI Package API打开Excel文件（ZIP格式）
+            try (OPCPackage pkg = OPCPackage.open(sourceFile.getInputStream())) {
+                // 获取workbook part
+                PackageRelationship workbookRel = pkg.getRelationshipsByType(
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+                ).getRelationship(0);
+                
+                PackagePart workbookPart = pkg.getPart(workbookRel);
+                
+                // 解析workbook.xml
+                try (InputStream workbookStream = workbookPart.getInputStream()) {
+                    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                    factory.setNamespaceAware(true);
+                    DocumentBuilder builder = factory.newDocumentBuilder();
+                    Document doc = builder.parse(workbookStream);
+                    
+                    // 获取所有sheet节点（按XML顺序即为显示顺序）
+                    NodeList sheetNodes = doc.getElementsByTagName("sheet");
+                    
+                    for (int i = 0; i < sheetNodes.getLength(); i++) {
+                        Element sheetElement = (Element) sheetNodes.item(i);
+                        
+                        // 获取r:id属性（可能在不同命名空间）
+                        String rid = sheetElement.getAttribute("r:id");
+                        if (rid == null || rid.isEmpty()) {
+                            rid = sheetElement.getAttributeNS(
+                                "http://schemas.openxmlformats.org/officeDocument/2006/relationships", 
+                                "id"
+                            );
+                        }
+                        
+                        if (rid != null && !rid.isEmpty()) {
+                            result.put(i, rid);
+                            
+                            if (debugger) {
+                                String sheetName = sheetElement.getAttribute("name");
+                                log.info("[DEBUGGER][ExcelImport.parseSheetMappings] 解析Sheet: index={}, name={}, rid={}", 
+                                    i, sheetName, rid);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (debugger) {
+                log.info("[DEBUGGER][ExcelImport.parseSheetMappings] 解析完成: 共{}个sheet", result.size());
+            }
+            
+        } catch (Exception e) {
+            log.error("[ExcelImport.parseSheetMappings] 解析workbook.xml失败，将使用降级策略", e);
+            if (debugger) {
+                log.error("[DEBUGGER][ExcelImport.parseSheetMappings] 解析异常详情", e);
+            }
+            // 返回空map，触发降级到-1
+            result.clear();
+        }
+        
+        return result;
     }
 
 }

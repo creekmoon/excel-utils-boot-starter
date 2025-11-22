@@ -3,6 +3,7 @@ package cn.creekmoon.excel.core.R.reader.cell;
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
+import cn.creekmoon.excel.core.R.reader.SheetIndexNormalizingRowHandler;
 import cn.creekmoon.excel.core.R.readerResult.ReaderResult;
 import cn.creekmoon.excel.core.R.readerResult.cell.CellReaderResult;
 import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
@@ -114,6 +115,10 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
     @Override
     public ReaderResult<R> read() throws InterruptedException, IOException {
+        if (getParent().debugger) {
+            log.info("[DEBUGGER][HutoolCellReader.read] 开始读取: 目标sheetIndex={}, 文件名={}", 
+                sheetIndex, getParent().sourceFile.getOriginalFilename());
+        }
 
         //新版读取 使用SAX读取模式
         ExcelUtilsConfig.importParallelSemaphore.acquire();
@@ -129,9 +134,59 @@ public class HutoolCellReader<R> extends CellReader<R> {
                 });
             }
 
-            Excel07SaxReader excel07SaxReader = initSaxReader(templateConsistencyCheckCells);
-            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
-            excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), -1);
+            // 获取sheetIndex对应的rid
+            String rid = getParent().getSheetRid(sheetIndex);
+            
+            // 确定是否使用单sheet优化模式
+            boolean isSingleSheetMode;
+            if (rid == null || rid.isEmpty()) {
+                // 映射失败，降级使用-1（读取所有sheet）
+                rid = "-1";
+                isSingleSheetMode = false;
+                if (getParent().debugger) {
+                    log.warn("[DEBUGGER][HutoolCellReader.read] 无法获取rid，降级使用-1: sheetIndex={}", sheetIndex);
+                }
+            } else {
+                // 使用单sheet优化
+                isSingleSheetMode = true;
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolCellReader.read] 使用单sheet优化: sheetIndex={} → rid={}", 
+                        sheetIndex, rid);
+                }
+            }
+
+            /*创建原始RowHandler*/
+            RowHandler originalHandler = createRowHandler(templateConsistencyCheckCells);
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] 创建原始RowHandler成功");
+            }
+            
+            /*用适配器包装*/
+            RowHandler wrappedHandler = new SheetIndexNormalizingRowHandler(
+                originalHandler,
+                sheetIndex,
+                isSingleSheetMode,
+                getParent().debugger
+            );
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] 创建适配器包装成功: actualSheetIndex={}", sheetIndex);
+            }
+            
+            /*创建SaxReader*/
+            Excel07SaxReader excel07SaxReader = new Excel07SaxReader(wrappedHandler);
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] 准备调用saxReader.read(): rid={}", rid);
+            }
+            
+            /*使用rid读取（可能是单sheet或所有sheet）*/
+            excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), rid);
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] saxReader.read()执行完成");
+            }
 
             /*模版一致性检查失败*/
             if (TEMPLATE_CONSISTENCY_CHECK_ENABLE && !templateConsistencyCheckCells.isEmpty()) {
@@ -142,10 +197,18 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常", e);
+            if (getParent().debugger) {
+                log.error("[DEBUGGER][HutoolCellReader.read] 读取异常: {}", e.getMessage(), e);
+            }
         } finally {
             getReadResult().readSuccessTime = LocalDateTime.now();
             /*释放信号量*/
             ExcelUtilsConfig.importParallelSemaphore.release();
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] 读取完成: 耗时={}ms", 
+                    java.time.Duration.between(getReadResult().readStartTime, getReadResult().readSuccessTime).toMillis());
+            }
         }
         return getReadResult();
     }
@@ -158,21 +221,17 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
 
     /**
-     * 初始化SAX读取器
+     * 创建RowHandler（业务处理逻辑）
      *
-     * @param
-     * @param templateConsistencyCheckCells
-     * @retur
+     * @param templateConsistencyCheckCells 模板一致性检查单元格集合
+     * @return RowHandler实例
      */
-    Excel07SaxReader initSaxReader(Set<String> templateConsistencyCheckCells) {
+    RowHandler createRowHandler(Set<String> templateConsistencyCheckCells) {
         Integer targetSheetIndex = sheetIndex;
         currentNewObject = newObjectSupplier.get();
 
-
-        /*返回一个Sax读取器*/
-        return new Excel07SaxReader(new RowHandler() {
+        return new RowHandler() {
             int currentSheetIndex = 0;
-
 
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
@@ -185,7 +244,16 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
                 int colIndex = cellIndex;
 
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolCellReader.handleCell] 接收回调: sheetIndex={}, rowIndex={}, cellIndex={}, value={}, targetSheetIndex={}", 
+                        sheetIndex, rowIndex, cellIndex, value, targetSheetIndex);
+                }
+
                 if (targetSheetIndex != currentSheetIndex) {
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolCellReader.handleCell] Sheet过滤: targetSheetIndex({}) != currentSheetIndex({}), 跳过", 
+                            targetSheetIndex, currentSheetIndex);
+                    }
                     return;
                 }
 
@@ -194,6 +262,10 @@ public class HutoolCellReader<R> extends CellReader<R> {
                         || !cell2setter.containsKey((int) rowIndex)
                         || !cell2setter.get((int) rowIndex).containsKey(colIndex)
                 ) {
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolCellReader.handleCell] 单元格不在配置中: rowIndex={}, colIndex={}, 跳过", 
+                            rowIndex, colIndex);
+                    }
                     return;
                 }
                 /*标题一致性检查*/
@@ -217,15 +289,36 @@ public class HutoolCellReader<R> extends CellReader<R> {
                     Object apply = cellConverter.apply(cellValue);
                     cellConsumer.accept(currentNewObject, apply);
                     getReadResult().setData((R) currentNewObject);
+                    
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolCellReader.handleCell] 单元格处理成功: rowIndex={}, colIndex={}, cellValue={}", 
+                            rowIndex, colIndex, cellValue);
+                    }
                 } catch (Exception e) {
                     getReadResult().EXISTS_READ_FAIL.set(true);
                     getReadResult().errorCount.incrementAndGet();
                     getReadResult().errorReport.append(StrFormatter.format(CONVERT_FAIL_MSG, ExcelCellUtils.excelIndexToCell((int) rowIndex, colIndex)))
                             .append(GlobalExceptionMsgManager.getExceptionMsg(e))
                             .append(";");
+                    
+                    if (getParent().debugger) {
+                        log.error("[DEBUGGER][HutoolCellReader.handleCell] 单元格处理异常: rowIndex={}, colIndex={}, error={}", 
+                            rowIndex, colIndex, e.getMessage(), e);
+                    }
                 }
             }
-        });
+        };
+    }
+
+    /**
+     * 初始化SAX读取器（保留用于向后兼容）
+     *
+     * @param templateConsistencyCheckCells 模板一致性检查单元格集合
+     * @return Excel07SaxReader实例
+     */
+    @Deprecated
+    Excel07SaxReader initSaxReader(Set<String> templateConsistencyCheckCells) {
+        return new Excel07SaxReader(createRowHandler(templateConsistencyCheckCells));
     }
 
     @Override

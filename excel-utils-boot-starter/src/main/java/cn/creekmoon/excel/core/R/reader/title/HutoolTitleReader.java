@@ -3,6 +3,7 @@ package cn.creekmoon.excel.core.R.reader.title;
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
+import cn.creekmoon.excel.core.R.reader.SheetIndexNormalizingRowHandler;
 import cn.creekmoon.excel.core.R.readerResult.title.TitleReaderResult;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.exception.CheckedExcelException;
@@ -77,8 +78,23 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     @SneakyThrows
     @Override
     public Long getSheetRowCount() {
+        if (getParent().debugger) {
+            log.info("[DEBUGGER][HutoolTitleReader.getSheetRowCount] 开始统计行数: sheetIndex={}", super.sheetIndex);
+        }
+        
         AtomicLong result = new AtomicLong(0);
-        ExcelSaxReader<?> excel07SaxReader = ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()), (new RowHandler() {
+        
+        // 获取sheetIndex对应的rid
+        String rid = getParent().getSheetRid(super.sheetIndex);
+        if (rid == null || rid.isEmpty()) {
+            rid = "-1";
+            if (getParent().debugger) {
+                log.warn("[DEBUGGER][HutoolTitleReader.getSheetRowCount] 无法获取rid，降级使用-1");
+            }
+        }
+        
+        /*创建计数RowHandler*/
+        RowHandler countHandler = new RowHandler() {
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowCells) {
                 if (sheetIndex != HutoolTitleReader.super.sheetIndex) {
@@ -86,12 +102,35 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                 }
                 result.incrementAndGet();
             }
-        }));
+        };
+        
+        /*用适配器包装*/
+        boolean isSingleSheetMode = !"-1".equals(rid);
+        RowHandler wrappedHandler = new SheetIndexNormalizingRowHandler(
+            countHandler,
+            super.sheetIndex,
+            isSingleSheetMode,
+            getParent().debugger
+        );
+        
+        /*创建SaxReader*/
+        ExcelSaxReader<?> excel07SaxReader = ExcelSaxUtil.createSaxReader(
+            ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()),
+            wrappedHandler
+        );
+        
         try {
-            excel07SaxReader.read(getParent().sourceFile.getInputStream(), -1);
+            /*使用rid读取*/
+            excel07SaxReader.read(getParent().sourceFile.getInputStream(), rid);
         } catch (Exception e) {
             log.error("getSheetRowCount方法读取文件异常", e);
         }
+        
+        if (getParent().debugger) {
+            log.info("[DEBUGGER][HutoolTitleReader.getSheetRowCount] 统计完成: sheetIndex={}, rowCount={}", 
+                super.sheetIndex, result.get());
+        }
+        
         return result.get();
     }
 
@@ -167,21 +206,88 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     @SneakyThrows
     @Override
     public TitleReaderResult<R> read() {
+        if (getParent().debugger) {
+            log.info("[DEBUGGER][HutoolTitleReader.read] 开始读取: 目标sheetIndex={}, 文件名={}", 
+                super.sheetIndex, getParent().sourceFile.getOriginalFilename());
+        }
+        
         /*尝试拿锁*/
         ExcelUtilsConfig.importParallelSemaphore.acquire();
         getReadResult().readStartTime = LocalDateTime.now();
         try {
             //新版读取 使用SAX读取模式
 
-            ExcelSaxReader saxReader = initSaxReader();
-            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
-            saxReader.read(this.getParent().sourceFile.getInputStream(), -1);
+            // 获取sheetIndex对应的rid
+            String rid = getParent().getSheetRid(super.sheetIndex);
+            
+            // 确定是否使用单sheet优化模式
+            boolean isSingleSheetMode;
+            if (rid == null || rid.isEmpty()) {
+                // 映射失败，降级使用-1（读取所有sheet）
+                rid = "-1";
+                isSingleSheetMode = false;
+                if (getParent().debugger) {
+                    log.warn("[DEBUGGER][HutoolTitleReader.read] 无法获取rid，降级使用-1: sheetIndex={}", super.sheetIndex);
+                }
+            } else {
+                // 使用单sheet优化
+                isSingleSheetMode = true;
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolTitleReader.read] 使用单sheet优化: sheetIndex={} → rid={}", 
+                        super.sheetIndex, rid);
+                }
+            }
+            
+            /*创建原始RowHandler*/
+            RowHandler originalHandler = createRowHandler();
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] 创建原始RowHandler成功");
+            }
+            
+            /*用适配器包装*/
+            RowHandler wrappedHandler = new SheetIndexNormalizingRowHandler(
+                originalHandler, 
+                super.sheetIndex, 
+                isSingleSheetMode,
+                getParent().debugger
+            );
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] 创建适配器包装成功: actualSheetIndex={}, singleSheetMode={}", 
+                    super.sheetIndex, isSingleSheetMode);
+            }
+            
+            /*创建SaxReader*/
+            ExcelSaxReader saxReader = createSaxReader(wrappedHandler);
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] 准备调用saxReader.read(): rid={}, saxReaderClass={}", 
+                    rid, saxReader.getClass().getName());
+                log.info("[DEBUGGER][HutoolTitleReader.read] 文件流信息: available={} bytes", 
+                    getParent().sourceFile.getInputStream().available());
+            }
+            
+            /*使用rid读取（可能是单sheet或所有sheet）*/
+            saxReader.read(this.getParent().sourceFile.getInputStream(), rid);
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] saxReader.read()执行完成");
+            }
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常", e);
+            if (getParent().debugger) {
+                log.error("[DEBUGGER][HutoolTitleReader.read] 读取异常: {}", e.getMessage(), e);
+            }
         } finally {
             getReadResult().readSuccessTime = LocalDateTime.now();
             /*释放信号量*/
             ExcelUtilsConfig.importParallelSemaphore.release();
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] 读取完成: 耗时={}ms", 
+                    java.time.Duration.between(getReadResult().readStartTime, getReadResult().readSuccessTime).toMillis());
+            }
         }
         return getReadResult();
     }
@@ -281,29 +387,38 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     }
 
     /**
-     * 初始化SAX读取器
+     * 创建RowHandler（业务处理逻辑）
      *
-     * @param
-     * @return
+     * @return RowHandler实例
      */
-
-    ExcelSaxReader initSaxReader() throws IOException {
-
+    RowHandler createRowHandler() {
         int targetSheetIndex = super.sheetIndex;
         TitleReaderResult titleReaderResult = (TitleReaderResult) getReadResult();
 
-        /*返回一个Sax读取器*/
-        return  ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()),new RowHandler() {
+        return new RowHandler() {
 
             @Override
             public void doAfterAllAnalysed() {
                 /*sheet读取结束时*/
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolTitleReader.doAfterAllAnalysed] Sheet读取结束: targetSheetIndex={}, colIndex2Title.size={}, 总数据行数={}", 
+                        targetSheetIndex, colIndex2Title.size(), titleReaderResult.rowIndex2dataBiMap.size());
+                }
             }
 
 
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolTitleReader.handle] 接收回调: sheetIndex={}, rowIndex={}, rowListSize={}, targetSheetIndex={}", 
+                        sheetIndex, rowIndex, rowList == null ? 0 : rowList.size(), targetSheetIndex);
+                }
+                
                 if (targetSheetIndex != sheetIndex) {
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] Sheet过滤: targetSheetIndex({}) != sheetIndex({}), 跳过此行", 
+                            targetSheetIndex, sheetIndex);
+                    }
                     return;
                 }
 
@@ -312,18 +427,30 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
                         colIndex2Title.put(colIndex, StringConverter.parse(rowList.get(colIndex)));
                     }
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] 读取标题行: rowIndex={}, 标题={}", 
+                            rowIndex, colIndex2Title);
+                    }
                     return;
                 }
                 /*只读取指定范围的数据 */
                 if (rowIndex == (int) titleRowIndex
                         || rowIndex < firstRowIndex
                         || rowIndex > latestRowIndex) {
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] 范围过滤: rowIndex={}, titleRowIndex={}, firstRowIndex={}, latestRowIndex={}, 跳过此行", 
+                            rowIndex, titleRowIndex, firstRowIndex, latestRowIndex);
+                    }
                     return;
                 }
                 /*没有添加 convert直接跳过 */
                 if (title2converts.isEmpty()
                         && title2consumers.isEmpty()
                 ) {
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] Convert配置为空: title2converts.size={}, title2consumers.size={}, 跳过此行", 
+                            title2converts.size(), title2consumers.size());
+                    }
                     return;
                 }
 
@@ -332,12 +459,21 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                 for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
                     hashDataMap.put(colIndex2Title.get(colIndex), StringConverter.parse(rowList.get(colIndex)));
                 }
+                
+                if (getParent().debugger) {
+                    log.info("[DEBUGGER][HutoolTitleReader.handle] 构建hashDataMap成功: rowIndex={}, dataMap={}", 
+                        rowIndex, hashDataMap);
+                }
+                
                 /*转换成业务对象*/
                 R currentObject = null;
                 try {
                     /*转换*/
                     currentObject = rowConvert(hashDataMap);
                     if (currentObject == null) {
+                        if (getParent().debugger) {
+                            log.info("[DEBUGGER][HutoolTitleReader.handle] rowConvert返回null (可能是空白行), 跳过");
+                        }
                         return;
                     }
                     /*转换后置处理器*/
@@ -347,6 +483,11 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     titleReaderResult.rowIndex2msg.put((int) rowIndex, CONVERT_SUCCESS_MSG);
                     /*消费*/
                     titleReaderResult.rowIndex2dataBiMap.put((int) rowIndex, currentObject);
+                    
+                    if (getParent().debugger) {
+                        log.info("[DEBUGGER][HutoolTitleReader.handle] 数据处理成功: rowIndex={}, object={}", 
+                            rowIndex, currentObject);
+                    }
                 } catch (Exception e) {
                     //假如存在任一数据convert阶段就失败的单, 将打一个标记
                     titleReaderResult.EXISTS_READ_FAIL.set(true);
@@ -355,10 +496,42 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
                     getReadResult().errorReport.append(StrFormatter.format("第[{}]行发生错误[{}]", (int) rowIndex + 1, exceptionMsg));
                     titleReaderResult.rowIndex2msg.put((int) rowIndex, exceptionMsg);
+                    
+                    if (getParent().debugger) {
+                        log.error("[DEBUGGER][HutoolTitleReader.handle] 数据处理异常: rowIndex={}, error={}", 
+                            rowIndex, exceptionMsg, e);
+                    }
 
                 }
             }
-        });
+        };
+    }
+
+    /**
+     * 创建ExcelSaxReader
+     *
+     * @param handler RowHandler实例
+     * @return ExcelSaxReader实例
+     */
+    ExcelSaxReader createSaxReader(RowHandler handler) throws IOException {
+        boolean isXlsx = ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream());
+        
+        if (getParent().debugger) {
+            log.info("[DEBUGGER][HutoolTitleReader.createSaxReader] 创建SaxReader: isXlsx={}, fileName={}", 
+                isXlsx, getParent().sourceFile.getOriginalFilename());
+        }
+        
+        return ExcelSaxUtil.createSaxReader(isXlsx, handler);
+    }
+
+    /**
+     * 初始化SAX读取器（保留用于向后兼容）
+     *
+     * @return ExcelSaxReader实例
+     */
+    @Deprecated
+    ExcelSaxReader initSaxReader() throws IOException {
+        return createSaxReader(createRowHandler());
     }
 
 
