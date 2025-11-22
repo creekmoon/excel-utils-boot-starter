@@ -33,10 +33,11 @@ import static cn.creekmoon.excel.util.ExcelConstants.*;
 public class HutoolCellReader<R> extends CellReader<R> {
 
 
-    public HutoolCellReader(ExcelImport parent, Integer sheetIndex, Supplier newObjectSupplier) {
+    public HutoolCellReader(ExcelImport parent, String sheetRid, String sheetName, Supplier newObjectSupplier) {
         super(parent);
         super.readerResult = new CellReaderResult();
-        super.sheetIndex = sheetIndex;
+        super.sheetRid = sheetRid;
+        super.sheetName = sheetName;
         super.newObjectSupplier = newObjectSupplier;
     }
 
@@ -129,9 +130,19 @@ public class HutoolCellReader<R> extends CellReader<R> {
                 });
             }
 
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] 开始读取sheet: rId={}, sheetName={}", 
+                        sheetRid, sheetName);
+            }
+            
             Excel07SaxReader excel07SaxReader = initSaxReader(templateConsistencyCheckCells);
-            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
-            excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), -1);
+            /*第一个参数 文件流  第二个参数 sheetRid 直接定位到指定sheet*/
+            excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), getParent().rid2SheetNameBiMap.get(sheetRid));
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] Sheet读取完成: rId={}, sheetName={}", 
+                        sheetRid, sheetName);
+            }
 
             /*模版一致性检查失败*/
             if (TEMPLATE_CONSISTENCY_CHECK_ENABLE && !templateConsistencyCheckCells.isEmpty()) {
@@ -165,14 +176,11 @@ public class HutoolCellReader<R> extends CellReader<R> {
      * @retur
      */
     Excel07SaxReader initSaxReader(Set<String> templateConsistencyCheckCells) {
-        Integer targetSheetIndex = sheetIndex;
         currentNewObject = newObjectSupplier.get();
 
 
         /*返回一个Sax读取器*/
         return new Excel07SaxReader(new RowHandler() {
-            int currentSheetIndex = 0;
-
 
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
@@ -181,13 +189,8 @@ public class HutoolCellReader<R> extends CellReader<R> {
 
             @Override
             public void handleCell(int sheetIndex, long rowIndex, int cellIndex, Object value, CellStyle xssfCellStyle) {
-                currentSheetIndex = sheetIndex;
-
+                // 由于已通过rId精准定位sheet，无需在回调中过滤
                 int colIndex = cellIndex;
-
-                if (targetSheetIndex != currentSheetIndex) {
-                    return;
-                }
 
                 /*解析单个单元格*/
                 if (cell2setter.size() <= 0
@@ -228,8 +231,4 @@ public class HutoolCellReader<R> extends CellReader<R> {
         });
     }
 
-    @Override
-    public Integer getSheetIndex() {
-        return getParent().sheetIndex2ReaderBiMap.getKey(this);
-    }
 }

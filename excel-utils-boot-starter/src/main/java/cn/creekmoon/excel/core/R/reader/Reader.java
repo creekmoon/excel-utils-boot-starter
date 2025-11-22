@@ -22,16 +22,21 @@ public abstract class Reader<R> {
 
     public Supplier newObjectSupplier;
 
-    public int sheetIndex;
+    /**
+     * Sheet的rId（Excel内部关系ID，稳定可靠）
+     */
+    public String sheetRid;
+
+    /**
+     * Sheet的名称
+     */
+    public String sheetName;
 
     /*启用模板一致性检查 为了防止模板导入错误*/
     public boolean TEMPLATE_CONSISTENCY_CHECK_ENABLE = true;
 
     /*标志位, 模板一致性检查已经失败 */
     public boolean TEMPLATE_CONSISTENCY_CHECK_FAILED = false;
-
-
-    public abstract Integer getSheetIndex();
 
     public abstract ReaderResult getReadResult();
 

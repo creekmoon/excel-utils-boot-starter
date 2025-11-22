@@ -32,10 +32,11 @@ import static cn.creekmoon.excel.util.ExcelConstants.*;
 public class HutoolTitleReader<R> extends TitleReader<R> {
 
 
-    public HutoolTitleReader(ExcelImport parent, Integer sheetIndex, Supplier newObjectSupplier) {
+    public HutoolTitleReader(ExcelImport parent, String sheetRid, String sheetName, Supplier newObjectSupplier) {
         super(parent);
         super.readerResult = new TitleReaderResult<R>();
-        super.sheetIndex = sheetIndex;
+        super.sheetRid = sheetRid;
+        super.sheetName = sheetName;
         super.newObjectSupplier = newObjectSupplier;
     }
 
@@ -58,7 +59,8 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         // 创建新的 reader 实例
         HutoolTitleReader<T> newReader = new HutoolTitleReader<>(
             this.getParent(), 
-            this.sheetIndex, 
+            this.sheetRid,
+            this.sheetName,
             newObjectSupplier
         );
         
@@ -81,14 +83,12 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         ExcelSaxReader<?> excel07SaxReader = ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()), (new RowHandler() {
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowCells) {
-                if (sheetIndex != HutoolTitleReader.super.sheetIndex) {
-                    return;
-                }
                 result.incrementAndGet();
             }
         }));
         try {
-            excel07SaxReader.read(getParent().sourceFile.getInputStream(), -1);
+            // 直接读取指定rId的sheet，无需在回调中过滤
+            excel07SaxReader.read(getParent().sourceFile.getInputStream(), sheetRid);
         } catch (Exception e) {
             log.error("getSheetRowCount方法读取文件异常", e);
         }
@@ -172,12 +172,21 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         getReadResult().readStartTime = LocalDateTime.now();
         try {
             //新版读取 使用SAX读取模式
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] 开始读取sheet: rId={}, sheetName={}", 
+                        sheetRid, sheetName);
+            }
 
             ExcelSaxReader saxReader = initSaxReader();
-            /*第一个参数 文件流  第二个参数 -1就是读取所有的sheet页*/
-            saxReader.read(this.getParent().sourceFile.getInputStream(), -1);
+            /*第一个参数 文件流  第二个参数 sheetRid 直接定位到指定sheet*/
+            saxReader.read(this.getParent().sourceFile.getInputStream(), getParent().rid2SheetNameBiMap.get(sheetRid));
+            
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] Sheet读取完成: rId={}, sheetName={}", 
+                        sheetRid, sheetName);
+            }
         } catch (Exception e) {
-            log.error("SaxReader读取Excel文件异常", e);
+            log.error("SaxReader读取Excel文件异常, sheetRid={}, sheetName={}", sheetRid, sheetName, e);
         } finally {
             getReadResult().readSuccessTime = LocalDateTime.now();
             /*释放信号量*/
@@ -289,7 +298,6 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
 
     ExcelSaxReader initSaxReader() throws IOException {
 
-        int targetSheetIndex = super.sheetIndex;
         TitleReaderResult titleReaderResult = (TitleReaderResult) getReadResult();
 
         /*返回一个Sax读取器*/
@@ -303,9 +311,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
 
             @Override
             public void handle(int sheetIndex, long rowIndex, List<Object> rowList) {
-                if (targetSheetIndex != sheetIndex) {
-                    return;
-                }
+                // 由于已通过rId精准定位sheet，无需在回调中过滤
 
                 /*读取标题*/
                 if (rowIndex == titleRowIndex) {
@@ -396,17 +402,6 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         return this;
     }
 
-
-    @Override
-    public Integer getSheetIndex() {
-        // 优先从 Map 中查找（适用于通过 switchSheet 创建的 Reader）
-        Integer index = getParent().sheetIndex2ReaderBiMap.getKey(this);
-        if (index != null) {
-            return index;
-        }
-        // 如果不在 Map 中（通过 reset 创建的 Reader），返回 sheetIndex 字段
-        return this.sheetIndex;
-    }
 
     @Override
     public TitleReaderResult<R> getReadResult() {

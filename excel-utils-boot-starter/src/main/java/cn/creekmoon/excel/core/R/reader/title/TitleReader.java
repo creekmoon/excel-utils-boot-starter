@@ -80,8 +80,6 @@ public abstract class TitleReader<R> extends Reader<R> {
 
     abstract public TitleReader<R> range(int startRowIndex);
 
-    abstract public Integer getSheetIndex();
-
     /**
      * 重置读取器以支持在同一个sheet中读取不同类型的表格
      * 新的读取器会清空所有转换规则和范围设置

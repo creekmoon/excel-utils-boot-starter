@@ -279,8 +279,7 @@ public class ExampleController {
                 new org.springframework.core.io.ClassPathResource("导入测试Sheet页存在多个表格.xlsx").getInputStream()
         );
 
-        ExcelImport excelImport = ExcelImport.create(file);
-
+        ExcelImport excelImport = ExcelImport.create(file,true);
         /*读取第一个表格：Student（第0行开始）*/
         log.info("========== 开始读取 Student 表格 ==========");
         TitleReader<Student> reader = excelImport.switchSheet(0, Student::new)
