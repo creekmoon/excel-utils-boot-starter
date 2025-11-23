@@ -35,7 +35,10 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.function.Supplier;
 
 /**
@@ -45,7 +48,7 @@ import java.util.function.Supplier;
 @Slf4j
 public class ExcelImport {
 
-    public BiMap<Integer, Reader> sheetIndex2ReaderBiMap = new BiMap<>(new HashMap<>());
+    public ArrayList<Reader> allReaders = new ArrayList<>();
 
     /**
      * Sheet的rId和SheetName的双向映射
@@ -70,9 +73,11 @@ public class ExcelImport {
 
 
     public static ExcelImport create(MultipartFile file) throws IOException {
-      return create(file, false);
+        return create(file, false);
     }
-    public static ExcelImport create(MultipartFile file,boolean debugger) throws IOException {
+
+
+    public static ExcelImport create(MultipartFile file, boolean debugger) throws IOException {
         ExcelImport excelImport = new ExcelImport();
         excelImport.sourceFile = file;
         excelImport.debugger = debugger;
@@ -93,16 +98,8 @@ public class ExcelImport {
      * @return
      */
     public <T> TitleReader<T> switchSheet(int sheetIndex, Supplier<T> supplier) {
-        if (supplier.get()==supplier.get()) {
+        if (supplier.get() == supplier.get()) {
             throw new RuntimeException("导出的对象不支持重写 equal() 方法. 请勿使用@Data注解!");
-        }
-        if (supplier.get()==supplier.get()) {
-            throw new RuntimeException("导出的对象不支持重写 equal() 方法. 请勿使用@Data注解!");
-        }
-        //如果已经存在读取器
-        TitleReader sheetReader = (TitleReader) this.sheetIndex2ReaderBiMap.get(sheetIndex);
-        if (sheetReader != null) {
-            return sheetReader;
         }
 
         // 从有序BiMap中获取第sheetIndex个entry的rId和sheetName
@@ -115,15 +112,15 @@ public class ExcelImport {
         }
         String rId = ridList.get(sheetIndex);
         String sheetName = rid2SheetNameBiMap.get(rId);
-        
+
         if (debugger) {
-            log.info("[DEBUGGER][ExcelImport.switchSheet] 选择的sheet: index={}, rId={}, sheetName={}", 
+            log.info("[DEBUGGER][ExcelImport.switchSheet] 选择的sheet: index={}, rId={}, sheetName={}",
                     sheetIndex, rId, sheetName);
         }
 
         //新增读取器，传递rId和sheetName
         HutoolTitleReader<T> reader = new HutoolTitleReader<>(this, rId, sheetName, supplier);
-        this.sheetIndex2ReaderBiMap.put(sheetIndex, reader);
+        this.allReaders.add(reader);
         return reader;
     }
 
@@ -137,11 +134,6 @@ public class ExcelImport {
      * @return
      */
     public <T> CellReader<T> switchSheetAndUseCellReader(int sheetIndex, Supplier<T> supplier) {
-        //如果已经存在读取器
-        CellReader sheetReader = (CellReader) this.sheetIndex2ReaderBiMap.get(sheetIndex);
-        if (sheetReader != null) {
-            return sheetReader;
-        }
 
         // 从有序BiMap中获取第sheetIndex个entry的rId和sheetName
         List<String> ridList = new ArrayList<>(rid2SheetNameBiMap.keySet());
@@ -153,15 +145,15 @@ public class ExcelImport {
         }
         String rId = ridList.get(sheetIndex);
         String sheetName = rid2SheetNameBiMap.get(rId);
-        
+
         if (debugger) {
-            log.info("[DEBUGGER][ExcelImport.switchSheetAndUseCellReader] 选择的sheet: index={}, rId={}, sheetName={}", 
+            log.info("[DEBUGGER][ExcelImport.switchSheetAndUseCellReader] 选择的sheet: index={}, rId={}, sheetName={}",
                     sheetIndex, rId, sheetName);
         }
 
         //新增读取器，传递rId和sheetName
         HutoolCellReader<T> reader = new HutoolCellReader<>(this, rId, sheetName, supplier);
-        this.sheetIndex2ReaderBiMap.put(sheetIndex, reader);
+        this.allReaders.add(reader);
         return reader;
     }
 
@@ -234,8 +226,7 @@ public class ExcelImport {
 
         try (Workbook workbook = new XSSFWorkbook(sourceFile.getInputStream());
              BufferedOutputStream outputStream = FileUtil.getOutputStream(absoluteFilePath)) {
-            for (Integer targetSheetIndex : sheetIndex2ReaderBiMap.keySet()) {
-                Reader<?> reader = sheetIndex2ReaderBiMap.get(targetSheetIndex);
+            for (Reader<?> reader : allReaders) {
                 Sheet sheet = workbook.getSheet(reader.sheetName);
                 if (reader instanceof TitleReader<?> titleReader) {
 
@@ -244,7 +235,7 @@ public class ExcelImport {
                         // Reader 未执行 read() 或 Sheet 不存在，跳过此 Reader
                         continue;
                     }
-                    
+
                     // 推算准备要写的位置
                     int titleRowIndex = titleReader.titleRowIndex;
                     Integer lastTitleColumnIndex = titleReader.colIndex2Title.keySet().stream().max(Integer::compareTo).get();
@@ -275,6 +266,7 @@ public class ExcelImport {
         }
         return FileUtil.file(absoluteFilePath);
     }
+
     /**
      * 解析Excel文件的workbook.xml，构建rId ↔ SheetName的双向映射
      * 使用POI Package API进行轻量级解析，不加载完整workbook

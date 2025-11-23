@@ -1,6 +1,7 @@
 package cn.creekmoon.excel.support.spring;
 
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
+import cn.creekmoon.excel.util.exception.CustomExceptionHandler;
 import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
 import lombok.SneakyThrows;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +22,7 @@ public class ExcelUtilsAutoConfiguration implements ImportSelector {
         Map annotationAttributes = importingClassMetadata.getAnnotationAttributes(EnableExcelUtils.class.getName(), true);
         /*获取配置项 - 自定义异常*/
         for (String customExceptionName : (String[]) annotationAttributes.get("customExceptions")) {
-            ExcelUtilsConfig.addExcelUtilsExceptionHandler(new GlobalExceptionMsgManager.DirectMessageExceptionHandler(customExceptionName));
+            ExcelUtilsConfig.addExcelUtilsExceptionHandler(new CustomExceptionHandler(customExceptionName));
         }
         /*获取配置项 - 最大并行导入*/
         ExcelUtilsConfig.importParallelSemaphore = new Semaphore(Math.max((Integer) annotationAttributes.get("importMaxParallel"), 1));

@@ -53,8 +53,6 @@ public abstract class TitleReader<R> extends Reader<R> {
     /*启用模板一致性检查 为了防止模板导入错误*/
     public boolean ENABLE_TEMPLATE_CONSISTENCY_REVIEW = true;
 
-    /*K=行下标 V=数据*/
-    public BiMap<Integer, R> rowIndex2dataBiMap = new BiMap<>(new LinkedHashMap<>());
 
     /*行结果集合*/
     public LinkedHashMap<Integer, String> rowIndex2msg = new LinkedHashMap<>();
@@ -67,11 +65,9 @@ public abstract class TitleReader<R> extends Reader<R> {
     }
 
     public List<R> getAll() {
-        if (EXISTS_READ_FAIL.get()) {
-            // 如果转化阶段就存在失败数据, 意味着数据不完整,应该返回空
-            return new ArrayList<>();
-        }
-        return new ArrayList<>(rowIndex2dataBiMap.values());
+        ArrayList<R> objects = new ArrayList<>(128);
+        read(objects::add);
+        return objects;
     }
 
     abstract public <T> TitleReader<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter);
@@ -89,8 +85,6 @@ public abstract class TitleReader<R> extends Reader<R> {
     abstract public <T> TitleReader<R> addConvertPostProcessor(ExConsumer<R> postProcessor);
 
     abstract public TitleReader<R> read(ExConsumer<R> dataConsumer);
-
-    abstract public TitleReader<R> read();
 
     abstract public TitleReader<R> range(int titleRowIndex, int firstDataRowIndex, int lastDataRowIndex);
 

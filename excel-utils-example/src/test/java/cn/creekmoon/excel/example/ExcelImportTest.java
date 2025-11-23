@@ -28,7 +28,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -118,15 +117,14 @@ class ExcelImportTest {
         Assertions.assertEquals(1000, count.get());
 
         /*第二个sheet导入测试*/
-        TitleReader<Student> sheetResult1 = excelImport.switchSheet(1, Student::new)
+        List<Student> students = excelImport.switchSheet(1, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .read();
-        List<Student> students = sheetResult1.getAll();
+                .getAll();
         Assertions.assertEquals(4, students.size());
 
         //检查临时文件是否能够正常生成和清理
@@ -161,10 +159,10 @@ class ExcelImportTest {
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
-        List<Student> students = studentSheetReader.read().getAll();
+        List<Student> students = studentSheetReader.getAll();
 
         /*检查是否能够正确读取*/
-        Assertions.assertEquals(2,students.size() );
+        Assertions.assertEquals(2, students.size());
     }
 
 
@@ -188,7 +186,7 @@ class ExcelImportTest {
                 .switchSheetAndUseCellReader(0, Student::new)
                 .addConvert("B1", Student::setUserName)
                 .addConvert("D1", Student::setFullName)
-                .addConvert(0,  5, IntegerConverter::parse, Student::setAge)
+                .addConvert(0, 5, IntegerConverter::parse, Student::setAge)
                 .read(sheet1::set);
         Assertions.assertEquals(sheet1.get().getUserName(), "李二狗");
         Assertions.assertEquals(sheet1.get().getFullName(), "李云龙");
@@ -217,7 +215,6 @@ class ExcelImportTest {
     }
 
 
-
     @Test
     void importTest() throws IOException, InterruptedException {
         /*读取导入文件*/
@@ -226,15 +223,16 @@ class ExcelImportTest {
         MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
 
         ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
-        TitleReader<Student> read = excelImport.switchSheet(0, Student::new)
+        TitleReader<Student> read = excelImport.switchSheet(0, Student::new);
+        List<Student> dataList  = read
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .read();
-        List<Student> dataList = read.getAll();
+                .getAll();
+
         // 数据从第二行开始, 而索引下标从0开始, 所以需要都-2
         assertEquals(88, dataList.get(6 - 2).age, "第6行数据年龄为88");
         assertEquals("poxo0", dataList.get(80 - 2).getUserName(), "第80行数据用户名是poxo0");
@@ -264,14 +262,14 @@ class ExcelImportTest {
         MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
 
         ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
-        TitleReader<Student> sheet1 = excelImport.switchSheet(0, Student::new)
+        excelImport.switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .read();
+                .getAll();
 
         TitleReader<Student> sheet2 = excelImport.switchSheet(1, Student::new)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)

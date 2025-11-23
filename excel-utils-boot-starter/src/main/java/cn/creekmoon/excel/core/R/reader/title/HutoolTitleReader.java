@@ -131,39 +131,24 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     }
 
 
-    @Override
-    public TitleReader<R> read(ExConsumer<R> dataConsumer) {
-        read();
-        rowIndex2dataBiMap.forEach((rowIndex, data) -> {
-            try {
-                dataConsumer.accept(data);
-                rowIndex2msg.put(rowIndex, ExcelConstants.IMPORT_SUCCESS_MSG);
-            } catch (Exception e) {
-                String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
-                rowIndex2msg.put(rowIndex, exceptionMsg);
-            }
-        });
-        return this;
-    }
-
     @SneakyThrows
     @Override
-    public TitleReader<R> read() {
+    public TitleReader<R> read(ExConsumer<R> dataConsumer) {
         /*尝试拿锁*/
         ExcelUtilsConfig.importParallelSemaphore.acquire();
         try {
             //新版读取 使用SAX读取模式
             if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolTitleReader.read] 开始读取sheet: rId={}, sheetName={}", 
+                log.info("[DEBUGGER][HutoolTitleReader.read] 开始读取sheet: rId={}, sheetName={}",
                         sheetRid, sheetName);
             }
 
-            ExcelSaxReader saxReader = initSaxReader();
+            ExcelSaxReader saxReader = initSaxReader(dataConsumer);
             /*第一个参数 文件流  第二个参数 sheetRid 直接定位到指定sheet*/
             saxReader.read(this.getParent().sourceFile.getInputStream(), getParent().rid2SheetNameBiMap.get(sheetRid));
-            
+
             if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolTitleReader.read] Sheet读取完成: rId={}, sheetName={}", 
+                log.info("[DEBUGGER][HutoolTitleReader.read] Sheet读取完成: rId={}, sheetName={}",
                         sheetRid, sheetName);
             }
         } catch (Exception e) {
@@ -174,7 +159,6 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         }
         return this;
     }
-
 
     /**
      * 增加读取范围限制
@@ -276,7 +260,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
      * @return
      */
 
-    ExcelSaxReader initSaxReader() throws IOException {
+    ExcelSaxReader initSaxReader(ExConsumer<R> dataConsumer) throws IOException {
 
         /*返回一个Sax读取器*/
         return  ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()),new RowHandler() {
@@ -329,15 +313,17 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                         convertPostProcessor.accept(currentObject);
                     }
                     rowIndex2msg.put((int) rowIndex, CONVERT_SUCCESS_MSG);
-                    /*消费*/
-                    rowIndex2dataBiMap.put((int) rowIndex, currentObject);
+                    dataConsumer.accept(currentObject);
                 } catch (Exception e) {
-                    //假如存在任一数据convert阶段就失败的单, 将打一个标记
+                    //先记录异常信息
                     EXISTS_READ_FAIL.set(true);
-                    /*写入导出Excel结果*/
                     String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
                     rowIndex2msg.put((int) rowIndex, exceptionMsg);
 
+                    //如果是非自定义异常,中断读取
+                    if (GlobalExceptionMsgManager.isCustomException(e)) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         });
