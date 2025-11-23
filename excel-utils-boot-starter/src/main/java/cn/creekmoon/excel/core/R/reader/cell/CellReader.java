@@ -2,8 +2,10 @@ package cn.creekmoon.excel.core.R.reader.cell;
 
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.reader.Reader;
+import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Set;
@@ -35,11 +37,6 @@ public abstract class CellReader<R> extends Reader<R> {
     /* key=rowIndex  value=<colIndex,Consumer> 单元格消费者(通常是setter方法)*/
     public LinkedHashMap<Integer, HashMap<Integer, BiConsumer>> cell2setter = new LinkedHashMap(32);
 
-    /*启用模板一致性检查 为了防止模板导入错误*/
-    public boolean TEMPLATE_CONSISTENCY_CHECK_ENABLE = true;
-
-    /*标志位, 模板一致性检查已经失败 */
-    protected boolean TEMPLATE_CONSISTENCY_CHECK_HAS_FAILED = false;
 
     private R data = null;
 
@@ -48,17 +45,6 @@ public abstract class CellReader<R> extends Reader<R> {
 
     public CellReader(ExcelImport parent) {
         super(parent);
-    }
-
-    public R getData() {
-        if (EXISTS_READ_FAIL.get()) {
-            return null;
-        }
-        return data;
-    }
-
-    public void setData(R data) {
-        this.data = data;
     }
 
 
@@ -178,6 +164,17 @@ public abstract class CellReader<R> extends Reader<R> {
      */
     abstract public CellReader<R> addConvertAndMustExist(String cellReference, BiConsumer<R, String> setter);
 
+    public abstract R read(ExConsumer<R> consumer) throws Exception;
+
+    public abstract R read() throws InterruptedException, IOException;
+
+    protected R getData() {
+        return data;
+    }
+
+    protected void setData(R data) {
+        this.data = data;
+    }
 }
 
 

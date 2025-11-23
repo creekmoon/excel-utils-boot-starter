@@ -50,6 +50,9 @@ public abstract class TitleReader<R> extends Reader<R> {
     /*启用空白行过滤*/
     public boolean ENABLE_BLANK_ROW_FILTER = true;
 
+    /*启用模板一致性检查 为了防止模板导入错误*/
+    public boolean ENABLE_TEMPLATE_CONSISTENCY_REVIEW = true;
+
     /*K=行下标 V=数据*/
     public BiMap<Integer, R> rowIndex2dataBiMap = new BiMap<>(new LinkedHashMap<>());
 
@@ -70,9 +73,6 @@ public abstract class TitleReader<R> extends Reader<R> {
         }
         return new ArrayList<>(rowIndex2dataBiMap.values());
     }
-
-
-    abstract public Long getSheetRowCount();
 
     abstract public <T> TitleReader<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter);
 

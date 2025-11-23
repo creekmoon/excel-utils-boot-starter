@@ -11,7 +11,6 @@ import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelFileUtil;
-import cn.hutool.poi.excel.sax.Excel07SaxReader;
 import cn.hutool.poi.excel.sax.ExcelSaxReader;
 import cn.hutool.poi.excel.sax.ExcelSaxUtil;
 import cn.hutool.poi.excel.sax.handler.RowHandler;
@@ -29,6 +28,8 @@ import static cn.creekmoon.excel.util.ExcelConstants.*;
 @Slf4j
 public class HutoolTitleReader<R> extends TitleReader<R> {
 
+    /*标志位, 模板一致性检查已经失败 */
+    public boolean TEMPLATE_CONSISTENCY_CHECK_FAILED = false;
 
     public HutoolTitleReader(ExcelImport parent, String sheetRid, String sheetName, Supplier newObjectSupplier) {
         super(parent);
@@ -66,30 +67,6 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         // Reset 创建的 Reader 只用于临时读取，不参与结果文件生成
         
         return newReader;
-    }
-
-    /**
-     * 获取SHEET页的总行数
-     *
-     * @return
-     */
-    @SneakyThrows
-    @Override
-    public Long getSheetRowCount() {
-        AtomicLong result = new AtomicLong(0);
-        ExcelSaxReader<?> excel07SaxReader = ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()), (new RowHandler() {
-            @Override
-            public void handle(int sheetIndex, long rowIndex, List<Object> rowCells) {
-                result.incrementAndGet();
-            }
-        }));
-        try {
-            // 直接读取指定rId的sheet，无需在回调中过滤
-            excel07SaxReader.read(getParent().sourceFile.getInputStream(), sheetRid);
-        } catch (Exception e) {
-            log.error("getSheetRowCount方法读取文件异常", e);
-        }
-        return result.get();
     }
 
 
@@ -245,13 +222,13 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
      */
     private R rowConvert(Map<String, String> row) throws Exception {
         /*进行模板一致性检查*/
-        if (super.TEMPLATE_CONSISTENCY_CHECK_ENABLE) {
-            if (super.TEMPLATE_CONSISTENCY_CHECK_FAILED || !templateConsistencyCheck(super.title2converts.keySet(), row.keySet())) {
-                super.TEMPLATE_CONSISTENCY_CHECK_FAILED = true;
+        if (super.ENABLE_TEMPLATE_CONSISTENCY_REVIEW) {
+            if (TEMPLATE_CONSISTENCY_CHECK_FAILED || !templateConsistencyCheck(super.title2converts.keySet(), row.keySet())) {
+                TEMPLATE_CONSISTENCY_CHECK_FAILED = true;
                 throw new CheckedExcelException(TITLE_CHECK_ERROR);
             }
         }
-        super.TEMPLATE_CONSISTENCY_CHECK_ENABLE = false;
+        super.ENABLE_TEMPLATE_CONSISTENCY_REVIEW = false;
 
         /*过滤空白行*/
         if (super.ENABLE_BLANK_ROW_FILTER
@@ -387,7 +364,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
      * @return
      */
     public HutoolTitleReader<R> disableTemplateConsistencyCheck() {
-        super.TEMPLATE_CONSISTENCY_CHECK_ENABLE = false;
+        super.ENABLE_TEMPLATE_CONSISTENCY_REVIEW = false;
         return this;
     }
 

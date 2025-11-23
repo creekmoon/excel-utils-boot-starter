@@ -182,13 +182,13 @@ public class ExampleController {
 
         ExcelExport excelExport = ExcelExport.create();
 
-        /*示例1: 从第5行开始写入标题和数据，数据写入到第20行*/
-        excelExport.switchNewSheet("从第5行开始", Student.class)
+        /*示例1: 从第6行开始写入标题和数据，数据写入到第20行*/
+        excelExport.switchNewSheet("从第6行开始", Student.class)
                 .addTitle("用户名", Student::getUserName)
                 .addTitle("全名", Student::getFullName)
                 .addTitle("年龄", Student::getAge)
                 .addTitle("邮箱", Student::getEmail)
-                .range(5, 19)  // 标题在第5行(索引4)，数据写入到第20行(索引19)
+                .range(5, 19)  // 标题从第6行(索引5)开始，数据写入到第20行(索引19)
                 .write(studentList);
 
         /*示例2: 从第10行开始写入，不限制结束行*/
@@ -198,10 +198,10 @@ public class ExampleController {
                 .addTitle("年龄", Student::getAge,
                         of(LIGHT_GREEN, x -> x.getAge() > 50))
                 .addTitle("邮箱", Student::getEmail)
-                .range(9)  // 标题在第10行(索引9)，数据从第11行开始写到结束
+                .range(9)  // 标题从第10行(索引9)开始，数据紧接着标题之后写到结束
                 .write(studentList);
 
-        /*示例3: 完整指定标题行、首行数据和末行数据*/
+        /*示例3: 完整指定标题行、首行数据和末行数据（多级表头示例）*/
         excelExport.switchNewSheet("完整指定范围", Student.class)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName,
@@ -209,7 +209,7 @@ public class ExampleController {
                 .addTitle("年龄", Student::getAge)
                 .addTitle("邮箱", Student::getEmail)
                 .addTitle("生日", Student::getBirthday)
-                .range(2, 6, 15)  // 标题在第3行(索引2)，数据从第5行(索引4)开始，写到第16行(索引15)
+                .range(2, 4, 15)  // 标题从第3行(索引2)开始，数据从第5行(索引4)开始，写到第16行(索引15)
                 .write(studentList);
 
 
@@ -346,22 +346,21 @@ public class ExampleController {
                 .addTitle("全名", Student::getFullName)
                 .addTitle("年龄", Student::getAge)
                 .addTitle("邮箱", Student::getEmail)
-                .write(studentList);
+                .write(studentList)
 
-        /*使用reset方法重置writer，在同一个sheet中写入第二个表格：Teacher*/
-        writer.reset(Teacher.class)
+
+                .reset(Teacher.class)
                 .addTitle("教师姓名", Teacher::getTeacherName)
                 .addTitle("工作年限", Teacher::getWorkYear,
                         of(LIGHT_GREEN, x -> x.getWorkYear() > 5))
-                .write(teacherList);
+                .write(teacherList)
 
-        /*可以继续reset，写入第三个表格（这里再次写入Student作为示例）*/
-        writer.reset(Student.class)
+
+                .reset(Student.class,2)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName,
                         of(LIGHT_ORANGE, x -> true))
                 .addTitle("年龄", Student::getAge)
-                .range(85)  // 也可以手动指定起始位置
                 .write(studentList.subList(0, 10));
 
         excelExport.response(response);

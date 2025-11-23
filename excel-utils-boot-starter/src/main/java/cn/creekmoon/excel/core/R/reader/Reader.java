@@ -29,10 +29,5 @@ public abstract class Reader<R> {
      */
     public String sheetName;
 
-    /*启用模板一致性检查 为了防止模板导入错误*/
-    public boolean TEMPLATE_CONSISTENCY_CHECK_ENABLE = true;
-
-    /*标志位, 模板一致性检查已经失败 */
-    public boolean TEMPLATE_CONSISTENCY_CHECK_FAILED = false;
 
 }

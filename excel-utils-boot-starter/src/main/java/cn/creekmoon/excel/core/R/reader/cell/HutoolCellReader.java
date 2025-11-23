@@ -7,7 +7,6 @@ import cn.creekmoon.excel.util.ExcelCellUtils;
 import cn.creekmoon.excel.util.exception.CheckedExcelException;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
-import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.sax.Excel07SaxReader;
@@ -120,31 +119,17 @@ public class HutoolCellReader<R> extends CellReader<R> {
         try {
             /*模版一致性检查:  获取声明的所有CELL, 接下来如果读取到cell就会移除, 当所有cell命中时说明单元格是一致的.*/
             Set<String> templateConsistencyCheckCells = new HashSet<>();
-            if (TEMPLATE_CONSISTENCY_CHECK_ENABLE) {
-                cell2setter.forEach((rowIndex, colIndexMap) -> {
-                    colIndexMap.forEach((colIndex, var) -> {
-                        templateConsistencyCheckCells.add(ExcelCellUtils.excelIndexToCell(rowIndex, colIndex));
-                    });
-                });
-            }
-
             if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolCellReader.read] 开始读取sheet: rId={}, sheetName={}", 
+                log.info("[DEBUGGER][HutoolCellReader.read] 开始读取sheet: rId={}, sheetName={}",
                         sheetRid, sheetName);
             }
-            
             Excel07SaxReader excel07SaxReader = initSaxReader(templateConsistencyCheckCells);
             /*第一个参数 文件流  第二个参数 sheetRid 直接定位到指定sheet*/
             excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), getParent().rid2SheetNameBiMap.get(sheetRid));
-            
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolCellReader.read] Sheet读取完成: rId={}, sheetName={}", 
-                        sheetRid, sheetName);
-            }
 
-            /*模版一致性检查失败*/
-            if (TEMPLATE_CONSISTENCY_CHECK_ENABLE && !templateConsistencyCheckCells.isEmpty()) {
-                EXISTS_READ_FAIL.set(true);
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolCellReader.read] Sheet读取完成: rId={}, sheetName={}",
+                        sheetRid, sheetName);
             }
 
         } catch (Exception e) {

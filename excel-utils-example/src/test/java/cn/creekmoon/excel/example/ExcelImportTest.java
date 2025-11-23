@@ -164,10 +164,7 @@ class ExcelImportTest {
         List<Student> students = studentSheetReader.read().getAll();
 
         /*检查是否能够正确读取*/
-        Assertions.assertEquals(studentSheetReader.getSheetRowCount(), 1001L);
-
-        /*检查是否能够正确读取*/
-        Assertions.assertEquals(students.size(), 2);
+        Assertions.assertEquals(2,students.size() );
     }
 
 
@@ -247,7 +244,7 @@ class ExcelImportTest {
         //全部数据有1000条
         assertEquals(1000, dataList.size(), "全部数据有1000条");
         assertEquals(1, read.rowIndex2msg.keySet().stream().min(Integer::compareTo).get(), "数据起始行下标预期为1");
-        assertEquals(1000, read.getDataLatestRowIndex(), "数据结束行下标预期为1000");
+        assertEquals(1000, read.rowIndex2msg.keySet().stream().max(Integer::compareTo).get(), "数据结束行下标预期为1000");
 
         long countAgeLg60 = dataList
                 .stream()
