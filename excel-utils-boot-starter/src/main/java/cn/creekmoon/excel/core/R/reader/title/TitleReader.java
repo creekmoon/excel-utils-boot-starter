@@ -2,9 +2,11 @@ package cn.creekmoon.excel.core.R.reader.title;
 
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.reader.Reader;
+import cn.creekmoon.excel.util.exception.ExBiConsumer;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
-import cn.hutool.core.map.BiMap;
+import cn.creekmoon.excel.util.exception.ExTriConsumer;
+import lombok.SneakyThrows;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -64,9 +66,14 @@ public abstract class TitleReader<R> extends Reader<R> {
         super(parent);
     }
 
+
+    /**
+     * 拿到所有的数据, 并标记导入成功.
+     * @return
+     */
     public List<R> getAll() {
         ArrayList<R> objects = new ArrayList<>(128);
-        read(objects::add);
+        read((ExConsumer<R>) objects::add);
         return objects;
     }
 
@@ -84,7 +91,24 @@ public abstract class TitleReader<R> extends Reader<R> {
 
     abstract public <T> TitleReader<R> addConvertPostProcessor(ExConsumer<R> postProcessor);
 
+
+    /**
+     * 消费单条数据
+     * 1.消费过程中没有抛出异常, 则认为导入成功
+     * 2.消费过程中抛出异常, 不会终止导入
+     * @param dataConsumer 数据消费器
+     * @return
+     */
     abstract public TitleReader<R> read(ExConsumer<R> dataConsumer);
+
+
+    /**
+     *  消费单条数据
+     *  如果消费过程中不抛出异常, 则认为导入成功
+     * @param dataConsumer 第一个入参是数据下标索引 第二个参数是数据本身
+     * @return
+     */
+    public abstract TitleReader<R> read(ExBiConsumer<Integer, R> dataConsumer);
 
     abstract public TitleReader<R> range(int titleRowIndex, int firstDataRowIndex, int lastDataRowIndex);
 
@@ -98,11 +122,10 @@ public abstract class TitleReader<R> extends Reader<R> {
      * 需要重新调用 addConvert() 和 range() 配置
      *
      * @param newObjectSupplier 新表格的对象创建器
-     * @param <T> 新的数据类型
+     * @param <T>               新的数据类型
      * @return 新的 TitleReader 实例
      */
     abstract public <T> TitleReader<T> reset(Supplier<T> newObjectSupplier);
-
 
 
 }

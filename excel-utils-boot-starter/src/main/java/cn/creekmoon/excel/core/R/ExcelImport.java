@@ -35,10 +35,7 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 import java.util.function.Supplier;
 
 /**
@@ -196,11 +193,7 @@ public class ExcelImport {
 
     public ExcelImport response(HttpServletResponse response) throws IOException {
         File file = generateResultFile();
-//        IoUtil.copy(sourceFile.getInputStream(), FileUtil.getOutputStream(ExcelFileUtils.getAbsoluteFilePath(this.taskId)));
-//        File file = FileUtil.file(ExcelFileUtils.getAbsoluteFilePath(this.taskId));
-//        System.out.println("file.canRead() = " + file.canRead());
-//        System.out.println("file.canWrite() = " + file.canWrite());
-        ExcelFileUtils.response(ExcelFileUtils.generateXlsxAbsoluteFilePath(this.taskId), taskId + ".xlsx", response);
+        ExcelFileUtils.response(file, taskId + ".xlsx", response);
         return this;
     }
 

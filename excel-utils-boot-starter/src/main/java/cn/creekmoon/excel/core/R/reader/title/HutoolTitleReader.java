@@ -4,22 +4,19 @@ import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
 import cn.creekmoon.excel.util.ExcelConstants;
-import cn.creekmoon.excel.util.exception.CheckedExcelException;
-import cn.creekmoon.excel.util.exception.ExConsumer;
-import cn.creekmoon.excel.util.exception.ExFunction;
-import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
+import cn.creekmoon.excel.util.exception.*;
 import cn.hutool.core.text.StrFormatter;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.poi.excel.ExcelFileUtil;
 import cn.hutool.poi.excel.sax.ExcelSaxReader;
 import cn.hutool.poi.excel.sax.ExcelSaxUtil;
+import cn.hutool.poi.excel.sax.StopReadException;
 import cn.hutool.poi.excel.sax.handler.RowHandler;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
@@ -42,30 +39,30 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
      * 重置读取器以支持在同一个sheet中读取不同类型的表格
      * 新的读取器会清空所有转换规则和范围设置
      * 需要重新调用 addConvert() 和 range() 配置
-     * 
+     * <p>
      * 重要限制：
      * - Reset 创建的 Reader 不会参与 ExcelImport.generateResultFile() 的结果生成
      * - 如果需要完整的导入验证结果报告，建议为每个数据类型使用独立的 switchSheet()
      * - Reset 适用于在同一 Sheet 中读取多个数据区域，但不需要生成统一验证报告的场景
      *
      * @param newObjectSupplier 新表格的对象创建器
-     * @param <T> 新的数据类型
+     * @param <T>               新的数据类型
      * @return 新的 TitleReader 实例
      */
     @Override
     public <T> HutoolTitleReader<T> reset(Supplier<T> newObjectSupplier) {
         // 创建新的 reader 实例
         HutoolTitleReader<T> newReader = new HutoolTitleReader<>(
-            this.getParent(), 
-            this.sheetRid,
-            this.sheetName,
-            newObjectSupplier
+                this.getParent(),
+                this.sheetRid,
+                this.sheetName,
+                newObjectSupplier
         );
-        
+
         // 注意：不更新 ExcelImport 的 Map
         // 这样可以保留第一个（主）Reader 用于生成导入结果文件
         // Reset 创建的 Reader 只用于临时读取，不参与结果文件生成
-        
+
         return newReader;
     }
 
@@ -131,9 +128,16 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     }
 
 
-    @SneakyThrows
+
     @Override
     public TitleReader<R> read(ExConsumer<R> dataConsumer) {
+        return read((Integer rowIndex, R data) -> dataConsumer.accept(data));
+    }
+
+
+    @SneakyThrows
+    @Override
+    public TitleReader<R> read(ExBiConsumer<Integer, R> dataConsumer) {
         /*尝试拿锁*/
         ExcelUtilsConfig.importParallelSemaphore.acquire();
         try {
@@ -260,10 +264,10 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
      * @return
      */
 
-    ExcelSaxReader initSaxReader(ExConsumer<R> dataConsumer) throws IOException {
+    ExcelSaxReader initSaxReader(ExBiConsumer<Integer, R> dataConsumer) throws IOException {
 
         /*返回一个Sax读取器*/
-        return  ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()),new RowHandler() {
+        return ExcelSaxUtil.createSaxReader(ExcelFileUtil.isXlsx(getParent().sourceFile.getInputStream()), new RowHandler() {
 
             @Override
             public void doAfterAllAnalysed() {
@@ -312,16 +316,16 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     for (ExConsumer convertPostProcessor : convertPostProcessors) {
                         convertPostProcessor.accept(currentObject);
                     }
-                    rowIndex2msg.put((int) rowIndex, CONVERT_SUCCESS_MSG);
-                    dataConsumer.accept(currentObject);
+                    setRowMsg((int) rowIndex, CONVERT_SUCCESS_MSG);
+                    dataConsumer.accept((int) rowIndex, currentObject);
+                    setRowMsg((int) rowIndex, IMPORT_SUCCESS_MSG);
                 } catch (Exception e) {
                     //先记录异常信息
                     EXISTS_READ_FAIL.set(true);
                     String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
-                    rowIndex2msg.put((int) rowIndex, exceptionMsg);
-
+                    setRowMsg((int) rowIndex, exceptionMsg);
                     //如果是非自定义异常,中断读取
-                    if (GlobalExceptionMsgManager.isCustomException(e)) {
+                    if (!GlobalExceptionMsgManager.isCustomException(e)) {
                         throw new RuntimeException(e);
                     }
                 }
@@ -364,4 +368,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         return this;
     }
 
+    public void setRowMsg(int rowIndex, String msg) {
+        rowIndex2msg.put(rowIndex, msg);
+    }
 }

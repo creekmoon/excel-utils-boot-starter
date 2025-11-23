@@ -8,7 +8,7 @@ import cn.creekmoon.excel.core.R.reader.title.TitleReader;
 import cn.creekmoon.excel.core.W.ExcelExport;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
 import cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle;
-import cn.hutool.core.util.RandomUtil;
+import cn.hutool.poi.excel.sax.StopReadException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,13 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.concurrent.CompletableFuture;
 
 import static cn.creekmoon.excel.core.W.title.ext.ConditionCellStyle.of;
-import static cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle.*;
+import static cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle.LIGHT_GREEN;
+import static cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle.LIGHT_ORANGE;
 import static cn.creekmoon.excel.example.Student.createStudentList;
 import static cn.creekmoon.excel.example.Teacher.createTeacherList;
 
@@ -99,7 +97,7 @@ public class ExampleController {
     @PostMapping(value = "/importExcel")
     @Operation(summary = "导入数据")
     public void importExcelBySax(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws Exception {
-        if (file==null) {
+        if (file == null) {
             file = new MockMultipartFile(
                     "导入测试.xlsx",
                     "导入测试.xlsx",
@@ -124,7 +122,7 @@ public class ExampleController {
                 .read(x -> {
                     if ("lisi@qq.com".equals(x.getEmail())) {
                         Thread.sleep(2000);
-                        throw new RuntimeException("错误!");
+                        throw new StopReadException("错误!");
                     }
                     log.info(x.toString());
                 });
@@ -144,15 +142,14 @@ public class ExampleController {
     @Operation(summary = "导入数据(读取指定单元格)")
     public void importExcelByCell(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws Exception {
         /*从资源文件中读取测试数据*/
-        if (file==null) {
-             file = new MockMultipartFile(
+        if (file == null) {
+            file = new MockMultipartFile(
                     "导入测试(读取指定单元格).xlsx",
                     "导入测试(读取指定单元格).xlsx",
                     "application/vnd.ms-excel",
                     new org.springframework.core.io.ClassPathResource("导入测试(读取指定单元格).xlsx").getInputStream()
             );
         }
-
 
 
         ExcelImport excelImport = ExcelImport.create(file);
@@ -227,7 +224,7 @@ public class ExampleController {
     @PostMapping(value = "/importExcelWithRange")
     @Operation(summary = "导入数据(使用range方法控制读取范围)")
     public void importExcelWithRange(MultipartFile file, HttpServletRequest request, HttpServletResponse response) throws Exception {
-        if (file==null) {
+        if (file == null) {
             file = new MockMultipartFile(
                     "导入测试.xlsx",
                     "导入测试.xlsx",
@@ -277,7 +274,7 @@ public class ExampleController {
                 new org.springframework.core.io.ClassPathResource("导入测试Sheet页存在多个表格.xlsx").getInputStream()
         );
 
-        ExcelImport excelImport = ExcelImport.create(file,true);
+        ExcelImport excelImport = ExcelImport.create(file, true);
         /*读取第一个表格：Student（第0行开始）*/
         log.info("========== 开始读取 Student 表格 ==========");
         TitleReader<Student> reader = excelImport.switchSheet(0, Student::new)
@@ -286,8 +283,8 @@ public class ExampleController {
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .range(0, 50);
-        reader.read(student -> log.info("读取Student: 用户名={}, 全名={}, 年龄={}, 邮箱={}", 
-                        student.getUserName(), student.getFullName(), student.getAge(), student.getEmail()));
+        reader.read(student -> log.info("读取Student: 用户名={}, 全名={}, 年龄={}, 邮箱={}",
+                student.getUserName(), student.getFullName(), student.getAge(), student.getEmail()));
 
         /*使用 reset 方法读取第二个表格：Teacher（约在第52行）*/
         log.info("========== 开始读取 Teacher 表格 ==========");
@@ -295,8 +292,8 @@ public class ExampleController {
                 .addConvert("教师姓名", Teacher::setTeacherName)
                 .addConvert("工作年限", IntegerConverter::parse, Teacher::setWorkYear)
                 .range(52, 82);
-        teacherReader.read(teacher -> log.info("读取Teacher: 教师姓名={}, 工作年限={}", 
-                        teacher.getTeacherName(), teacher.getWorkYear()));
+        teacherReader.read(teacher -> log.info("读取Teacher: 教师姓名={}, 工作年限={}",
+                teacher.getTeacherName(), teacher.getWorkYear()));
 
         /*再次使用 reset 读取第三个表格：Student（约在第84行）*/
         log.info("========== 开始读取第二次 Student 表格 ==========");
@@ -305,20 +302,20 @@ public class ExampleController {
                 .addConvert("基本信息::全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .range(84)
-                .read(student -> log.info("读取Student(多级表头): 用户名={}, 全名={}, 年龄={}", 
+                .read(student -> log.info("读取Student(多级表头): 用户名={}, 全名={}, 年龄={}",
                         student.getUserName(), student.getFullName(), student.getAge()));
 
         /*
          * 注意：此示例使用了 reset 方法读取多个不同类型的数据
          * reset 创建的 Reader 不会参与导入结果文件的生成
          * 因此这里不调用 excelImport.response(response)
-         * 
+         *
          * 如果需要生成包含所有数据验证结果的文件，建议：
          * 1. 使用多个 ExcelImport 实例分别处理
          * 2. 或者将不同类型的数据放在不同的 Sheet 页中
          */
         // excelImport.response(response);  // 不调用，因为结果不完整
-        
+
         log.info("========== 数据读取完成 ==========");
     }
 
@@ -340,7 +337,7 @@ public class ExampleController {
 
         /*在同一个sheet中写入不同类型的多个表格*/
         TitleWriter<Student> writer = excelExport.switchNewSheet("多表格Sheet", Student.class);
-        
+
         /*写入第一个表格：Student*/
         writer.addTitle("用户名", Student::getUserName)
                 .addTitle("全名", Student::getFullName)
@@ -356,7 +353,7 @@ public class ExampleController {
                 .write(teacherList)
 
 
-                .reset(Student.class,2)
+                .reset(Student.class, 2)
                 .addTitle("基本信息::用户名", Student::getUserName)
                 .addTitle("基本信息::全名", Student::getFullName,
                         of(LIGHT_ORANGE, x -> true))
@@ -366,21 +363,10 @@ public class ExampleController {
         excelExport.response(response);
     }
 
-    /**
-     * 大数据量导入场景 - 使用 disableDataMemoryCache() 优化内存占用
-     *
-     * 场景说明：
-     * - 当导入10万+行数据时，默认会将所有数据对象缓存到内存中（用于结果报告和后续消费）
-     * - 如果只需要流式处理数据（边读边保存），不需要缓存所有数据对象
-     * - 调用 disableDataMemoryCache() 可以显著降低内存占用
-     *
-     * @param file Excel文件
-     * @param response 响应
-     * @throws Exception 异常
-     */
-    @PostMapping(value = "/importExcelWithDisableCache")
-    @Operation(summary = "大数据量导入(禁用数据缓存优化内存)")
-    public void importExcelWithDisableCache(MultipartFile file, HttpServletResponse response) throws Exception {
+
+    @PostMapping(value = "/importExcelBigData")
+    @Operation(summary = "大数据量导入")
+    public void importExcelBigData(MultipartFile file, HttpServletResponse response) throws Exception {
         // 如果没有上传文件，使用测试文件（20万行数据）
         if (file == null) {
             file = new MockMultipartFile(
@@ -393,21 +379,12 @@ public class ExampleController {
 
         log.info("========== 开始大数据量导入（20万行数据） ==========");
 
-        /*
-         * 示例1: 优化方式（禁用缓存）- 推荐用于大数据量场景
-         * 适用场景：
-         * - 数据量很大（10万+行）
-         * - 只需要流式处理数据，不需要 getAll() 或后续批量消费
-         * - 关注内存占用
-         */
-        log.info("---------- 示例1: 优化方式（禁用缓存，处理20万行数据） ----------");
-
         long startTime = System.currentTimeMillis();
         int[] counter = {0}; // 使用数组以便在lambda中修改
 
         ExcelImport excelImport = ExcelImport.create(file);
         excelImport.debugger = true;  // 🔍 开启debug模式，查看详细的读取过程
-        TitleReader<Student> result = excelImport.switchSheet(0, Student::new)
+        excelImport.switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
@@ -424,6 +401,7 @@ public class ExampleController {
                         log.info("已处理 {} 条数据，当前用户名: {}", counter[0], student.getUserName());
                     }
 
+
                     // 实际应用中可以在这里保存到数据库
                     // studentService.save(student);
 
@@ -435,32 +413,13 @@ public class ExampleController {
                 });
 
         long endTime = System.currentTimeMillis();
-
-        // 禁用缓存后，getAll() 返回空列表（节省内存）
-        log.info("优化方式: 缓存了 {} 条数据对象（已禁用缓存）", result.getAll().size());
         log.info("实际处理了 {} 条数据", counter[0]);
         log.info("处理耗时: {} 毫秒 (约 {} 秒)", (endTime - startTime), (endTime - startTime) / 1000);
 
-        /*
-         * 注意事项：
-         * 1. 禁用缓存后，仍然保留错误信息缓存（rowIndex2msg），可以生成验证结果文件
-         * 2. 禁用缓存后，getAll() 返回空列表
-         * 3. 禁用缓存后，consume() 在 read() 之后调用将无效（应该使用 read(consumer) 流式消费）
-         * 4. 禁用缓存后，setResultMsg(data, msg) 无法通过对象反查行号（应使用 setResultMsg(rowIndex, msg)）
-         * 5. 对于20万行数据，禁用缓存可以节省大量内存（约几百MB到1GB+）
-         */
-
-        /*
-         * 示例2: 生成验证结果文件（不受禁用缓存影响）
-         * generateResultFile() 依赖的是 rowIndex2msg（错误信息），而非 rowIndex2dataBiMap（数据对象）
-         * 因此即使禁用数据缓存，仍然可以正常生成导入结果文件
-         */
-        log.info("---------- 示例2: 生成验证结果文件（不受禁用缓存影响） ----------");
         excelImport.response(response);
 
         log.info("========== 大数据量导入完成 ==========");
-        log.info("提示：启用缓存和禁用缓存的内存占用差异在数据量越大时越明显");
-        log.info("建议：10万+行数据时使用 disableDataMemoryCache() 优化内存");
-    }
 
+
+    }
 }
