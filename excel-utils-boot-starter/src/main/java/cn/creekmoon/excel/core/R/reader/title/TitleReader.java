@@ -95,7 +95,7 @@ public abstract class TitleReader<R> extends Reader<R> {
     /**
      * 消费单条数据
      * 1.消费过程中没有抛出异常, 则认为导入成功
-     * 2.消费过程中抛出异常, 不会终止导入
+     * 2.消费过程中抛出异常, 终止导入
      * @param dataConsumer 数据消费器
      * @return
      */
@@ -103,8 +103,9 @@ public abstract class TitleReader<R> extends Reader<R> {
 
 
     /**
-     *  消费单条数据
-     *  如果消费过程中不抛出异常, 则认为导入成功
+     * 消费单条数据
+     * 1.单条消费过程中没有抛出异常, 则认为导入成功
+     * 2.单条消费过程中抛出异常, 则后续终止导入
      * @param dataConsumer 第一个入参是数据下标索引 第二个参数是数据本身
      * @return
      */
