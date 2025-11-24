@@ -147,12 +147,8 @@ public class ExcelFileUtils {
     protected static String getApplicationParentFilePath() {
         if (applicationParentFilePath == null) {
             synchronized (ExcelExport.class) {
-                try {
-                    if (applicationParentFilePath == null) {
-                        applicationParentFilePath = new File(Paths.get(ResourceUtils.getURL("classpath:").toURI()).toString()).getParentFile().getParentFile().getParent();
-                    }
-                } catch (FileNotFoundException e) {
-                    log.error("生成临时目录失败! 请检查!");
+                if (applicationParentFilePath == null) {
+                    applicationParentFilePath = System.getProperty("user.dir");
                 }
             }
         }
