@@ -18,6 +18,12 @@ public abstract class TitleWriter<R> extends Writer {
      */
     protected List<Title> titles = new ArrayList<>();
 
+    /**
+     * 当前 writer 实例是否已经执行过一次 write（包含空数据仅写表头）。
+     * 一旦写入过，为避免表头/列结构与已落盘内容不一致，禁止继续 addTitle。
+     */
+    protected boolean wroteOnce = false;
+
 
     /* 多级表头时会用到 全局标题深度  initTitle方法会给其赋值
      *
@@ -64,6 +70,9 @@ public abstract class TitleWriter<R> extends Writer {
      * 添加标题
      */
     public TitleWriter<R> addTitle(String titleName, Function<R, Object> valueFunction, ConditionCellStyle<R>... conditionStyle) {
+        if (wroteOnce) {
+            throw new IllegalStateException("当前TitleWriter已执行过write()，不允许再addTitle()；如需写入同一Sheet的下一段表格，请使用reset()获取新的Writer实例。");
+        }
         titles.add(Title.of(titleName, valueFunction, conditionStyle));
         return this;
     }
@@ -77,6 +86,7 @@ public abstract class TitleWriter<R> extends Writer {
 
     public TitleWriter<R> write(List<R> data) {
         preWrite();
+        this.wroteOnce = true;
         this.doWrite(data);
         return this;
     }

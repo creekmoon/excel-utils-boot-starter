@@ -28,6 +28,10 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
      */
     protected int currentRow = 0;
 
+    private String sheetInitKey(int sheetIndex) {
+        return "SHEET_INIT_" + sheetIndex;
+    }
+
     public HutoolTitleWriter(ExcelExport parent, Integer sheetIndex) {
         this.parent = parent;
         this.sheetIndex = sheetIndex;
@@ -440,6 +444,15 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
     protected void preWrite() {
         super.preWrite();
 
+        // fast-fail：保证sheet页初始化顺序（必须先完成上一个sheet的首次write/initTitles）
+        if (sheetIndex != null && sheetIndex > 0) {
+            if (!parent.metadatas.containsKey(sheetInitKey(sheetIndex - 1))) {
+                throw new IllegalStateException("切换sheet页失败：sheetIndex=" + sheetIndex
+                        + " 的首次写入要求 sheetIndex=" + (sheetIndex - 1)
+                        + " 已经执行过一次 write() 完成初始化（允许 write(emptyList) 仅写表头）。");
+            }
+        }
+
 
         if (getBigExcelWriter().getSheetCount() == 1
                 && getBigExcelWriter().getSheets().get(0).getPhysicalNumberOfRows() == 0
@@ -451,13 +464,20 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
             getBigExcelWriter().setSheet(sheetName);
         }
 
-        // 设置当前写入位置为标题行位置
+        // 追加写：恢复到上一次写入结束位置，避免覆盖/重复写表头
+        if (isTitleInitialized()) {
+            getBigExcelWriter().setCurrentRow(this.currentRow);
+            return;
+        }
+
+        // 首次写：定位标题行 -> 初始化/写表头 -> 定位首行数据
         getBigExcelWriter().setCurrentRow(titleRowIndex == null ? 0 : titleRowIndex);
-
         this.initTitles();
-
-        // 设置当前写入位置为首行数据位置
         getBigExcelWriter().setCurrentRow(firstRowIndex);
+
+        // 关键：支持首次 write(emptyList) 仅写表头后仍可追加写
+        this.currentRow = getBigExcelWriter().getCurrentRow();
+        parent.metadatas.put(sheetInitKey(this.sheetIndex), Boolean.TRUE);
     }
 
     /**
