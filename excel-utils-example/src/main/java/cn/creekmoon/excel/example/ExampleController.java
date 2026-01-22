@@ -5,6 +5,8 @@ import cn.creekmoon.excel.core.R.converter.DateConverter;
 import cn.creekmoon.excel.core.R.converter.IntegerConverter;
 import cn.creekmoon.excel.core.R.converter.LocalDateTimeConverter;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
+import cn.creekmoon.excel.core.R.report.ImportOptions;
+import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.core.W.ExcelExport;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
 import cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle;
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -162,6 +165,97 @@ public class ExampleController {
         log.info("读取到的学生数据: {}", student);
         excelImport.response(response);
 
+    }
+
+    /**
+     * v3.0+ 新特性：直接返回 JSON 结果（无需 response）
+     * 适用于 API 场景，只需要返回导入结果的 JSON
+     *
+     * @param file 上传的 Excel 文件
+     * @return 结构化的导入报告
+     * @throws Exception
+     */
+    @PostMapping(value = "/api/importExcel")
+    @Operation(summary = "导入数据并返回JSON（v3.0+新特性）")
+    public ResponseEntity<ImportReport<Student>> importExcelApi(MultipartFile file) throws Exception {
+        if (file == null) {
+            file = new MockMultipartFile(
+                    "导入测试.xlsx",
+                    "导入测试.xlsx",
+                    "application/vnd.ms-excel",
+                    new org.springframework.core.io.ClassPathResource("导入测试.xlsx").getInputStream()
+            );
+        }
+
+        ExcelImport excelImport = ExcelImport.create(file);
+        
+        // 使用 API 场景预设（fail-fast + 错误阈值 + 不收集成功数据）
+        ImportOptions options = ImportOptions.forApi();
+        
+        // 直接获取结构化报告
+        ImportReport<Student> report = excelImport.switchSheet(0, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .readWithReport(options);
+        
+        log.info("导入完成：总计 {} 条，成功 {} 条，失败 {} 条", 
+                 report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
+        
+        // 报告会自动序列化为 JSON 返回给前端
+        return ResponseEntity.ok(report);
+    }
+
+    /**
+     * v3.0+ 新特性：使用自定义 ImportOptions 配置
+     * 展示如何灵活配置导入行为
+     *
+     * @param file 上传的 Excel 文件
+     * @param response HTTP 响应
+     * @throws Exception
+     */
+    @PostMapping(value = "/importExcelWithOptions")
+    @Operation(summary = "使用自定义配置导入（v3.0+新特性）")
+    public void importExcelWithOptions(MultipartFile file, HttpServletResponse response) throws Exception {
+        if (file == null) {
+            file = new MockMultipartFile(
+                    "导入测试.xlsx",
+                    "导入测试.xlsx",
+                    "application/vnd.ms-excel",
+                    new org.springframework.core.io.ClassPathResource("导入测试.xlsx").getInputStream()
+            );
+        }
+
+        ExcelImport excelImport = ExcelImport.create(file);
+        
+        // 自定义配置
+        ImportOptions options = new ImportOptions();
+        options.setFailFastOnTemplateMismatch(true);  // 模板不匹配立即停止
+        options.setMaxErrorRows(50);                  // 错误超过50行停止
+        options.setCollectRowErrors(true);            // 收集行级错误明细
+        options.setCollectSuccessData(false);         // 不收集成功数据（节省内存）
+        
+        ImportReport<Student> report = excelImport.switchSheet(0, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .readWithReport(options);
+        
+        log.info("导入完成：总计 {} 条，成功 {} 条，失败 {} 条", 
+                 report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
+        
+        if (report.getGlobalErrorCode() != null) {
+            log.warn("全局错误：{} - {}", report.getGlobalErrorCode(), report.getGlobalErrorMessage());
+        }
+        
+        // 生成带有验证结果的 Excel 文件
+        excelImport.response(response);
     }
 
     /**

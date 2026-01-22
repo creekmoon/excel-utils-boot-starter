@@ -192,6 +192,18 @@ public class ExcelImport {
 
 
     public ExcelImport response(HttpServletResponse response) throws IOException {
+        // 检查是否所有 Reader 都配置了 collectRowErrors
+        for (Reader<?> reader : allReaders) {
+            if (reader instanceof TitleReader<?> titleReader) {
+                var report = titleReader.getReport();
+                if (report != null && report.getRowErrors() == null) {
+                    log.warn("[ExcelImport.response] 检测到 Reader(sheet={}) 未开启 collectRowErrors，" +
+                            "错误信息将无法写入Excel文件。建议使用 ImportOptions.forExcelResponse() 配置。",
+                            titleReader.sheetName);
+                }
+            }
+        }
+        
         File file = generateResultFile();
         ExcelFileUtils.response(file, taskId + ".xlsx", response);
         return this;
@@ -223,34 +235,63 @@ public class ExcelImport {
                 Sheet sheet = workbook.getSheet(reader.sheetName);
                 if (reader instanceof TitleReader<?> titleReader) {
 
-                    // 检查 colIndex2Title 是否已初始化（即是否调用过 read()）
+                    // 检查 report 是否存在（即是否调用过 read()）
+                    if (titleReader.getReport() == null) {
+                        // Reader 未执行 read()，跳过此 Reader
+                        continue;
+                    }
+                    
+                    // 检查 colIndex2Title 是否已初始化
                     if (titleReader.colIndex2Title == null || titleReader.colIndex2Title.isEmpty()) {
-                        // Reader 未执行 read() 或 Sheet 不存在，跳过此 Reader
+                        // Sheet 不存在或未读取到标题，跳过此 Reader
                         continue;
                     }
 
+                    var report = titleReader.getReport();
+                    
                     // 推算准备要写的位置
                     int titleRowIndex = titleReader.titleRowIndex;
                     Integer lastTitleColumnIndex = titleReader.colIndex2Title.keySet().stream().max(Integer::compareTo).get();
                     int msgTitleColumnIndex = lastTitleColumnIndex + 1;
-                    Integer dataFirstRowIndex = titleReader.rowIndex2msg.keySet().stream().min(Integer::compareTo).orElse(null);
-                    Integer dataLatestRowIndex = titleReader.rowIndex2msg.keySet().stream().max(Integer::compareTo).orElse(null);
 
-                    // 添加空值检查
-                    if (dataFirstRowIndex == null || dataLatestRowIndex == null) {
-                        continue;
+                    // 写标题行（健壮性：确保行存在）
+                    org.apache.poi.ss.usermodel.Row titleRow = sheet.getRow(titleRowIndex);
+                    if (titleRow == null) {
+                        titleRow = sheet.createRow(titleRowIndex);
                     }
-
-                    // 开始写结果行
-                    CellStyle titleCellStyle = sheet.getRow(titleRowIndex).getCell(lastTitleColumnIndex).getCellStyle();
-                    Cell cell1 = sheet.getRow(titleRowIndex).createCell(msgTitleColumnIndex);
-                    cell1.setCellStyle(titleCellStyle);
+                    CellStyle titleCellStyle = titleRow.getCell(lastTitleColumnIndex) != null 
+                            ? titleRow.getCell(lastTitleColumnIndex).getCellStyle() 
+                            : null;
+                    Cell cell1 = titleRow.createCell(msgTitleColumnIndex);
+                    if (titleCellStyle != null) {
+                        cell1.setCellStyle(titleCellStyle);
+                    }
                     cell1.setCellValue(ExcelConstants.RESULT_TITLE);
 
-                    // 设置导入结果内容
-                    for (Integer rowIndex = dataFirstRowIndex; rowIndex <= dataLatestRowIndex; rowIndex++) {
-                        Cell cell = sheet.getRow(rowIndex).createCell(msgTitleColumnIndex);
-                        cell.setCellValue(titleReader.rowIndex2msg.get(rowIndex));
+                    // 写失败行的错误消息
+                    if (report.getRowErrors() != null && !report.getRowErrors().isEmpty()) {
+                        for (var rowError : report.getRowErrors()) {
+                            org.apache.poi.ss.usermodel.Row dataRow = sheet.getRow(rowError.getRowIndex());
+                            if (dataRow == null) {
+                                dataRow = sheet.createRow(rowError.getRowIndex());
+                            }
+                            Cell cell = dataRow.createCell(msgTitleColumnIndex);
+                            cell.setCellValue(rowError.getMessage());
+                        }
+                    }
+                    
+                    // 如果存在全局错误且没有行错误，至少写一条全局错误提示
+                    if (report.getGlobalErrorMessage() != null 
+                            && (report.getRowErrors() == null || report.getRowErrors().isEmpty())) {
+                        Integer targetRowIndex = report.getProcessedFirstRowIndex() != null 
+                                ? report.getProcessedFirstRowIndex() 
+                                : titleReader.firstRowIndex;
+                        org.apache.poi.ss.usermodel.Row dataRow = sheet.getRow(targetRowIndex);
+                        if (dataRow == null) {
+                            dataRow = sheet.createRow(targetRowIndex);
+                        }
+                        Cell cell = dataRow.createCell(msgTitleColumnIndex);
+                        cell.setCellValue(report.getGlobalErrorMessage());
                     }
                 }
             }

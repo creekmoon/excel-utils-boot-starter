@@ -20,13 +20,45 @@
 <dependency>
     <groupId>cn.creekmoon</groupId>
     <artifactId>excel-utils-boot-starter</artifactId>
-    <version>2.2.2</version>
+    <version>2.3.0</version>
 </dependency>
 ```
 
 > ⚠️ 从 2.0.0 版本开始，基于 Spring Boot 3.0 (JDK 17) 开发
 
-### 2. 启用工具类
+### 2. 大版本升级说明（v2.3.0+）
+
+**Breaking Changes：**
+
+从 v2.3.0 开始，导入功能进行了架构升级，以更好地支持 API/JSON 场景：
+
+1. **移除** `TitleReader.rowIndex2msg`  
+   - 替代方案：使用 `ImportReport` 获取结构化导入结果
+   - 影响：直接访问 `reader.rowIndex2msg` 的代码需要迁移到 `reader.getReport()`
+
+2. **Excel 回写行为变化**  
+   - 旧版：结果列会为每行写入"导入成功!"或失败原因
+   - 新版：结果列**默认只写失败原因**，成功行留空（更节省内存，适合大文件）
+
+3. **新增能力**  
+   - `readWithReport(options)` - 返回结构化 `ImportReport`，可直接序列化为 JSON
+   - `ImportOptions` - 统一配置入口（fail-fast、错误阈值、数据收集策略等）
+
+**迁移示例：**
+
+```java
+// 旧版（已废弃）
+reader.rowIndex2msg.get(rowIndex);  // ❌
+
+// 新版
+ImportReport<User> report = reader.getReport();
+report.getRowErrors();  // ✅ 获取行级错误
+report.getGlobalErrorMessage();  // ✅ 获取全局错误
+```
+
+详见后续章节：**导入场景 - 场景七：直接返回 JSON 结果（无需 response）**
+
+### 3. 启用工具类
 
 在 Spring Boot 启动类上添加注解：
 
@@ -375,6 +407,133 @@ public void importSchoolData(MultipartFile file, HttpServletResponse response) {
 }
 ```
 
+### 场景七：直接返回 JSON 结果（无需 response）
+
+**v2.3.0+ 新特性**：很多 API 场景只需要返回导入结果的 JSON，不需要生成 Excel 回写文件。
+
+```java
+@PostMapping("/api/import/users")
+public ResponseEntity<ImportReport<User>> importUsersApi(@RequestParam("file") MultipartFile file) {
+    ExcelImport excelImport = ExcelImport.create(file);
+    
+    // 配置导入选项（针对 API 场景优化）
+    ImportOptions options = ImportOptions.forApi(); // fail-fast + 错误阈值 + 不收集成功数据
+    
+    // 直接获取结构化报告
+    ImportReport<User> report = excelImport.switchSheet(0, User::new)
+        .addConvert("用户名", User::setUsername)
+        .addConvert("邮箱", User::setEmail)
+        .addConvert("年龄", IntegerConverter::parse, User::setAge)
+        .readWithReport(options);
+    
+    // 报告会自动序列化为 JSON 返回给前端
+    return ResponseEntity.ok(report);
+}
+```
+
+**返回的 JSON 结构示例：**
+
+```json
+{
+  "taskId": "a1b2c3d4-e5f6-7890",
+  "sheetName": "Sheet1",
+  "totalRows": 150,
+  "successRows": 145,
+  "errorRows": 5,
+  "globalErrorCode": null,
+  "globalErrorMessage": null,
+  "rowErrors": [
+    {
+      "rowIndex": 23,
+      "code": "VALIDATION_ERROR",
+      "message": "[失败!]字段[年龄]解析失败！不支持的数据格式!",
+      "field": null
+    },
+    {
+      "rowIndex": 45,
+      "code": "VALIDATION_ERROR",
+      "message": "[失败!]字段[邮箱]为必填项!",
+      "field": "邮箱"
+    }
+  ],
+  "data": null
+}
+```
+
+**ImportOptions 配置说明：**
+
+```java
+// 方式1：使用预设（推荐）
+ImportOptions.forApi();            // API 场景：fail-fast + 错误阈值100 + 不收集成功数据
+ImportOptions.forExcelResponse();  // Excel 回写场景：读完整表 + 收集所有错误
+ImportOptions.defaults();          // 默认配置
+
+// 方式2：自定义配置
+ImportOptions options = new ImportOptions();
+options.setFailFastOnTemplateMismatch(true);  // 模板不匹配立即停止
+options.setMaxErrorRows(50);                  // 错误超过50行停止
+options.setCollectRowErrors(true);            // 收集行级错误明细
+options.setCollectSuccessData(false);         // 不收集成功数据（节省内存）
+options.setMaxSuccessData(100);               // 若收集，最多100条
+```
+
+**模板不匹配时的 fail-fast 示例：**
+
+```java
+ImportOptions options = new ImportOptions();
+options.setFailFastOnTemplateMismatch(true);
+
+ImportReport<User> report = excelImport.switchSheet(0, User::new)
+    .addConvert("用户名", User::setUsername)
+    .addConvert("不存在的列", User::setEmail)  // 模板不匹配
+    .readWithReport(options);
+
+// 返回的 JSON
+{
+  "totalRows": 0,
+  "successRows": 0,
+  "errorRows": 0,
+  "globalErrorCode": "TEMPLATE_MISMATCH",
+  "globalErrorMessage": "导入的模板有误,请检查您的文件!",
+  "rowErrors": []
+}
+```
+
+**仍然支持 Excel 回写（兼容旧版）：**
+
+```java
+// 读取 + 返回 JSON
+ImportReport<User> report = reader.readWithReport(options);
+
+// 如果用户需要下载错误文件，仍可调用 response
+if (report.getErrorRows() > 0) {
+    excelImport.response(response);
+}
+```
+
+> ⚠️ **重要：`readWithReport()` 和 `response()` 的兼容性**
+> 
+> 如果需要同时使用 `readWithReport()` 和 `response()`，**必须确保** `ImportOptions.collectRowErrors = true`：
+> 
+> ```java
+> // ✅ 正确：使用预设配置（推荐）
+> ImportOptions options = ImportOptions.forExcelResponse();
+> report = reader.readWithReport(options);
+> excelImport.response(response);  // ✅ 可以正确写入错误
+> 
+> // ✅ 正确：使用默认配置
+> report = reader.readWithReport(ImportOptions.defaults());
+> excelImport.response(response);  // ✅ 可以正确写入错误
+> 
+> // ❌ 错误：自定义配置关闭了 collectRowErrors
+> ImportOptions custom = new ImportOptions();
+> custom.setCollectRowErrors(false);  // ❌ 关闭错误收集
+> report = reader.readWithReport(custom);
+> excelImport.response(response);  // ❌ 无法写入错误到Excel！
+> ```
+> 
+> 如果只需要 **API 返回 JSON**（不需要 response），可以使用 `ImportOptions.forApi()` 以获得更好的性能。
+
 ## 高级特性
 
 ### 样式配置
@@ -550,18 +709,27 @@ for (User user : users) {
 调用 `response()` 方法后，系统会自动生成一个包含导入结果的Excel文件：
 
 - 在原始数据右侧添加"导入结果"列
-- 显示每行数据的处理结果（成功/失败原因）
+- **v2.3.0+ 变化**：默认只显示失败行的原因，成功行留空（节省内存，适合大文件）
 - 失败的数据会保留原始内容，便于用户修改后重新导入
 
-#### 结果状态说明
+#### 结果状态说明（v2.3.0+）
 
-| 状态常量 | 含义 | 何时出现 |
+| 错误码 | 含义 | 何时出现 |
 |---------|------|---------|
-| `导入成功!` | 数据处理成功 | 业务逻辑执行无异常 |
-| `验证通过!` | 数据格式验证通过 | 数据转换成功，但未执行业务逻辑 |
-| `字段[xxx]解析失败！` | 数据转换失败 | 类型转换或格式错误 |
-| `字段[xxx]为必填项!` | 必填字段为空 | 使用 `addConvertAndMustExist` 且字段为空 |
-| 自定义消息 | 业务验证结果 | 通过 `setResultMsg` 设置 |
+| `TEMPLATE_MISMATCH` | 模板不匹配 | Excel 标题列与配置的列不一致 |
+| `VALIDATION_ERROR` | 数据验证失败 | 类型转换失败、必填项为空等 |
+| `FATAL` | 致命错误 | 非预期异常导致读取中断 |
+| `ERROR_LIMIT_REACHED` | 错误阈值触发 | 错误行数达到配置的上限 |
+
+**导入结果列内容示例：**
+
+```
+| 用户名  | 邮箱         | 年龄 | 导入结果                                    |
+|--------|-------------|------|-------------------------------------------|
+| zhang  | z@email.com | 25   |                                           | ← 成功行留空
+| li     | invalid     | abc  | [失败!]字段[年龄]解析失败！不支持的数据格式!    |
+| wang   |             | 30   | [失败!]字段[邮箱]为必填项!                  |
+```
 
 ## 最佳实践
 

@@ -2,6 +2,8 @@ package cn.creekmoon.excel.core.R.reader.title;
 
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.reader.Reader;
+import cn.creekmoon.excel.core.R.report.ImportOptions;
+import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.util.exception.ExBiConsumer;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
@@ -56,8 +58,11 @@ public abstract class TitleReader<R> extends Reader<R> {
     public boolean ENABLE_TEMPLATE_CONSISTENCY_REVIEW = true;
 
 
-    /*行结果集合*/
-    public LinkedHashMap<Integer, String> rowIndex2msg = new LinkedHashMap<>();
+    /*导入结果报告（大版本：替代 rowIndex2msg 作为唯一事实来源）*/
+    protected ImportReport<R> report;
+
+    /*导入配置选项*/
+    protected ImportOptions options;
 
     /*存在读取失败的数据*/
     public AtomicReference<Boolean> EXISTS_READ_FAIL = new AtomicReference<>(false);
@@ -69,12 +74,36 @@ public abstract class TitleReader<R> extends Reader<R> {
 
     /**
      * 拿到所有的数据, 并标记导入成功.
+     * 注意：大版本升级后，该方法会自动填充 ImportReport
      * @return
      */
     public List<R> getAll() {
         ArrayList<R> objects = new ArrayList<>(128);
         read((ExConsumer<R>) objects::add);
         return objects;
+    }
+
+    /**
+     * 读取并返回结构化导入报告（使用默认配置）
+     * @return 导入结果报告
+     */
+    public ImportReport<R> readWithReport() {
+        return readWithReport(ImportOptions.defaults());
+    }
+
+    /**
+     * 读取并返回结构化导入报告（使用指定配置）
+     * @param options 导入配置选项
+     * @return 导入结果报告
+     */
+    abstract public ImportReport<R> readWithReport(ImportOptions options);
+
+    /**
+     * 获取导入结果报告（必须先调用 read/getAll/readWithReport）
+     * @return 导入结果报告，若未执行读取则返回 null
+     */
+    public ImportReport<R> getReport() {
+        return report;
     }
 
     abstract public <T> TitleReader<R> addConvert(String title, ExFunction<String, T> convert, BiConsumer<R, T> setter);

@@ -3,6 +3,8 @@ package cn.creekmoon.excel.core.R.reader.title;
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
+import cn.creekmoon.excel.core.R.report.ImportOptions;
+import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.exception.*;
 import cn.hutool.core.text.StrFormatter;
@@ -134,10 +136,56 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         return read((Integer rowIndex, R data) -> dataConsumer.accept(data));
     }
 
+    @Override
+    public ImportReport<R> readWithReport(ImportOptions options) {
+        // 初始化配置和报告
+        super.options = options != null ? options : ImportOptions.defaults();
+        initializeReport();
+        
+        // 执行读取（会填充 report）
+        read((ExConsumer<R>) data -> {
+            // 如果需要收集成功数据
+            if (super.options.isCollectSuccessData()) {
+                if (super.report.getData() == null) {
+                    super.report.setData(new ArrayList<>());
+                }
+                Integer maxSuccessData = super.options.getMaxSuccessData();
+                if (maxSuccessData == null || super.report.getData().size() < maxSuccessData) {
+                    super.report.getData().add(data);
+                }
+            }
+        });
+        
+        return super.report;
+    }
+
+    /**
+     * 初始化导入报告
+     */
+    private void initializeReport() {
+        super.report = new ImportReport<>();
+        super.report.setTaskId(getParent().taskId);
+        super.report.setSheetRid(sheetRid);
+        super.report.setSheetName(sheetName);
+        super.report.setTitleRowIndex(titleRowIndex);
+        super.report.setFirstRowIndex(firstRowIndex);
+        super.report.setLatestRowIndex(latestRowIndex);
+        
+        // 初始化错误列表（如果需要收集）
+        if (super.options != null && super.options.isCollectRowErrors()) {
+            super.report.setRowErrors(new ArrayList<>());
+        }
+    }
 
     @SneakyThrows
     @Override
     public TitleReader<R> read(ExBiConsumer<Integer, R> dataConsumer) {
+        // 如果 report 尚未初始化，使用默认配置初始化
+        if (super.report == null) {
+            super.options = ImportOptions.defaults();
+            initializeReport();
+        }
+        
         /*尝试拿锁*/
         ExcelUtilsConfig.importParallelSemaphore.acquire();
         try {
@@ -155,8 +203,19 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                 log.info("[DEBUGGER][HutoolTitleReader.read] Sheet读取完成: rId={}, sheetName={}",
                         sheetRid, sheetName);
             }
+        } catch (StopReadException e) {
+            // StopReadException 是正常的提前终止，不算异常
+            if (getParent().debugger) {
+                log.info("[DEBUGGER][HutoolTitleReader.read] 读取提前终止（fail-fast或阈值停止）: rId={}, sheetName={}",
+                        sheetRid, sheetName);
+            }
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常, sheetRid={}, sheetName={}", sheetRid, sheetName, e);
+            // 记录到 report
+            if (super.report != null && !GlobalExceptionMsgManager.isCustomException((Exception) e)) {
+                super.report.setGlobalErrorCode("FATAL");
+                super.report.setGlobalErrorMessage(GlobalExceptionMsgManager.getExceptionMsg((Exception) e));
+            }
         } finally {
             /*释放信号量*/
             ExcelUtilsConfig.importParallelSemaphore.release();
@@ -209,14 +268,10 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
      * @throws Exception
      */
     private R rowConvert(Map<String, String> row) throws Exception {
-        /*进行模板一致性检查*/
-        if (super.ENABLE_TEMPLATE_CONSISTENCY_REVIEW) {
-            if (TEMPLATE_CONSISTENCY_CHECK_FAILED || !templateConsistencyCheck(super.title2converts.keySet(), row.keySet())) {
-                TEMPLATE_CONSISTENCY_CHECK_FAILED = true;
-                throw new CheckedExcelException(TITLE_CHECK_ERROR);
-            }
+        /*模板一致性检查已前置到标题行，这里检查标记即可*/
+        if (TEMPLATE_CONSISTENCY_CHECK_FAILED) {
+            throw new CheckedExcelException(TITLE_CHECK_ERROR);
         }
-        super.ENABLE_TEMPLATE_CONSISTENCY_REVIEW = false;
 
         /*过滤空白行*/
         if (super.ENABLE_BLANK_ROW_FILTER
@@ -284,6 +339,30 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     for (int colIndex = 0; colIndex < rowList.size(); colIndex++) {
                         colIndex2Title.put(colIndex, StringConverter.parse(rowList.get(colIndex)));
                     }
+                    
+                    // 标题行读取完成后，立即进行模板一致性检查
+                    if (ENABLE_TEMPLATE_CONSISTENCY_REVIEW) {
+                        Set<String> targetTitles = title2converts.keySet();
+                        Set<String> sourceTitles = new HashSet<>(colIndex2Title.values());
+                        
+                        if (!templateConsistencyCheck(targetTitles, sourceTitles)) {
+                            // 模板不匹配
+                            report.setGlobalErrorCode("TEMPLATE_MISMATCH");
+                            report.setGlobalErrorMessage(TITLE_CHECK_ERROR);
+                            
+                            // 如果配置了 fail-fast，立即终止
+                            if (options != null && options.isFailFastOnTemplateMismatch()) {
+                                throw new StopReadException();
+                            }
+                            
+                            // 否则标记为已失败，后续每行都会因此失败
+                            TEMPLATE_CONSISTENCY_CHECK_FAILED = true;
+                        }
+                        
+                        // 检查完成后关闭，避免重复检查
+                        ENABLE_TEMPLATE_CONSISTENCY_REVIEW = false;
+                    }
+                    
                     return;
                 }
                 /*只读取指定范围的数据 */
@@ -310,22 +389,59 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     /*转换*/
                     currentObject = rowConvert(hashDataMap);
                     if (currentObject == null) {
+                        // 空白行，不计入统计
                         return;
                     }
+                    
+                    // 更新 processed 范围
+                    if (report.getProcessedFirstRowIndex() == null) {
+                        report.setProcessedFirstRowIndex((int) rowIndex);
+                    }
+                    report.setProcessedLastRowIndex((int) rowIndex);
+                    report.setTotalRows(report.getTotalRows() + 1);
+                    
                     /*转换后置处理器*/
                     for (ExConsumer convertPostProcessor : convertPostProcessors) {
                         convertPostProcessor.accept(currentObject);
                     }
-                    setRowMsg((int) rowIndex, CONVERT_SUCCESS_MSG);
+                    
+                    // 成功：更新统计
+                    report.setSuccessRows(report.getSuccessRows() + 1);
                     dataConsumer.accept((int) rowIndex, currentObject);
-                    setRowMsg((int) rowIndex, IMPORT_SUCCESS_MSG);
+                    
                 } catch (Exception e) {
                     //先记录异常信息
                     EXISTS_READ_FAIL.set(true);
                     String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
-                    setRowMsg((int) rowIndex, exceptionMsg);
+                    
+                    // 更新 processed 范围（失败行也算处理过）
+                    if (report.getProcessedFirstRowIndex() == null) {
+                        report.setProcessedFirstRowIndex((int) rowIndex);
+                    }
+                    report.setProcessedLastRowIndex((int) rowIndex);
+                    report.setTotalRows(report.getTotalRows() + 1);
+                    
+                    // 失败：更新统计和错误明细
+                    report.setErrorRows(report.getErrorRows() + 1);
+                    
+                    // 收集错误明细
+                    if (options != null && options.isCollectRowErrors()) {
+                        String errorCode = determineErrorCode(e);
+                        report.getRowErrors().add(new ImportReport.RowError((int) rowIndex, errorCode, exceptionMsg));
+                    }
+                    
+                    // 检查错误阈值
+                    if (options != null && options.getMaxErrorRows() != null 
+                            && report.getErrorRows() >= options.getMaxErrorRows()) {
+                        report.setGlobalErrorCode("ERROR_LIMIT_REACHED");
+                        report.setGlobalErrorMessage("错误行数达到阈值 " + options.getMaxErrorRows() + "，已停止读取");
+                        throw new StopReadException();
+                    }
+                    
                     //如果是非自定义异常,中断读取
                     if (!GlobalExceptionMsgManager.isCustomException(e)) {
+                        report.setGlobalErrorCode("FATAL");
+                        report.setGlobalErrorMessage(exceptionMsg);
                         throw new RuntimeException(e);
                     }
                 }
@@ -368,7 +484,17 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         return this;
     }
 
-    public void setRowMsg(int rowIndex, String msg) {
-        rowIndex2msg.put(rowIndex, msg);
+    /**
+     * 根据异常类型确定错误码
+     */
+    private String determineErrorCode(Exception e) {
+        if (e instanceof CheckedExcelException) {
+            String msg = e.getMessage();
+            if (msg != null && msg.contains(TITLE_CHECK_ERROR)) {
+                return "TEMPLATE_MISMATCH";
+            }
+            return "VALIDATION_ERROR";
+        }
+        return "FATAL";
     }
 }
