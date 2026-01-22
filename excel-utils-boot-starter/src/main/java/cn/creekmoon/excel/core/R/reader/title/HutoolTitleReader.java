@@ -385,6 +385,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                 }
                 /*转换成业务对象*/
                 R currentObject = null;
+                boolean totalRowsCounted = false;  // 标记 totalRows 是否已计数
                 try {
                     /*转换*/
                     currentObject = rowConvert(hashDataMap);
@@ -393,35 +394,40 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                         return;
                     }
                     
-                    // 更新 processed 范围
+                    // 更新 processed 范围和 totalRows（只在这里一次）
                     if (report.getProcessedFirstRowIndex() == null) {
                         report.setProcessedFirstRowIndex((int) rowIndex);
                     }
                     report.setProcessedLastRowIndex((int) rowIndex);
                     report.setTotalRows(report.getTotalRows() + 1);
+                    totalRowsCounted = true;  // 标记已计数
                     
                     /*转换后置处理器*/
                     for (ExConsumer convertPostProcessor : convertPostProcessors) {
                         convertPostProcessor.accept(currentObject);
                     }
                     
-                    // 成功：更新统计
-                    report.setSuccessRows(report.getSuccessRows() + 1);
+                    // 执行用户 consumer
                     dataConsumer.accept((int) rowIndex, currentObject);
+                    
+                    // 成功：只有所有步骤都成功，才计入 successRows
+                    report.setSuccessRows(report.getSuccessRows() + 1);
                     
                 } catch (Exception e) {
                     //先记录异常信息
                     EXISTS_READ_FAIL.set(true);
                     String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
                     
-                    // 更新 processed 范围（失败行也算处理过）
-                    if (report.getProcessedFirstRowIndex() == null) {
-                        report.setProcessedFirstRowIndex((int) rowIndex);
+                    // 如果 totalRows 还没被计数（rowConvert 阶段就失败了）
+                    if (!totalRowsCounted) {
+                        if (report.getProcessedFirstRowIndex() == null) {
+                            report.setProcessedFirstRowIndex((int) rowIndex);
+                        }
+                        report.setProcessedLastRowIndex((int) rowIndex);
+                        report.setTotalRows(report.getTotalRows() + 1);
                     }
-                    report.setProcessedLastRowIndex((int) rowIndex);
-                    report.setTotalRows(report.getTotalRows() + 1);
                     
-                    // 失败：更新统计和错误明细
+                    // 失败：只更新 errorRows（不再重复计数 totalRows）
                     report.setErrorRows(report.getErrorRows() + 1);
                     
                     // 收集错误明细

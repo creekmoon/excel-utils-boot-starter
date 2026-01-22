@@ -450,4 +450,73 @@ class ExcelImportTest {
         // report 的 data 字段应为空（因为没有配置 collectSuccessData）
         assertNull(report.getData(), "未配置收集，data 应为 null");
     }
+
+    /**
+     * 测试统计逻辑修复：验证 totalRows/successRows/errorRows 统计正确性
+     * 
+     * 修复内容：
+     * 1. totalRows 只在转换成功后计数一次（不再重复计数）
+     * 2. successRows 只在所有步骤（包括 consumer）都成功后计数
+     * 3. errorRows 只在 catch 中计数
+     * 
+     * 预期结果：totalRows = successRows + errorRows
+     */
+    @Test
+    void importReportStatisticsFixedTest() throws Exception {
+        /*读取导入文件*/
+        String IMPORT_FILE_NAME = "import-demo-1000.xlsx";
+        InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
+        MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
+
+        ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
+        
+        cn.creekmoon.excel.core.R.report.ImportOptions options = new cn.creekmoon.excel.core.R.report.ImportOptions();
+        options.setCollectRowErrors(true);
+        
+        // 模拟业务场景：在 consumer 中对某些行进行校验，校验失败抛自定义异常
+        cn.creekmoon.excel.core.R.report.ImportReport<Student> report = excelImport
+                .switchSheet(0, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .read(student -> {
+                    // 模拟业务校验：年龄大于90的视为异常数据
+                    // 使用自定义异常（CheckedExcelException），避免触发 FATAL 中断
+                    if (student.getAge() != null && student.getAge() > 90) {
+                        throw new cn.creekmoon.excel.util.exception.CheckedExcelException("年龄超过90，业务校验失败");
+                    }
+                    // 正常情况下会执行业务逻辑，比如保存到数据库
+                })
+                .getReport();
+        
+        // 打印统计信息，便于调试
+        log.info("=== 统计修复验证 ===");
+        log.info("totalRows:   {}", report.getTotalRows());
+        log.info("successRows: {}", report.getSuccessRows());
+        log.info("errorRows:   {}", report.getErrorRows());
+        log.info("successRows + errorRows = {}", report.getSuccessRows() + report.getErrorRows());
+        
+        // 核心验证：统计数据的一致性
+        assertEquals(1000, report.getTotalRows(), "totalRows 应该等于实际处理的行数");
+        assertEquals(report.getTotalRows(), report.getSuccessRows() + report.getErrorRows(),
+                "totalRows 应该等于 successRows + errorRows");
+        
+        // 验证具体数值（基于年龄>90的筛选条件）
+        assertTrue(report.getErrorRows() > 0, "应该有年龄>90的错误行");
+        assertTrue(report.getSuccessRows() > 0, "应该有年龄≤90的成功行");
+        assertEquals(1000 - report.getErrorRows(), report.getSuccessRows(), 
+                "successRows 应该等于 totalRows - errorRows");
+        
+        // 验证错误明细
+        assertNotNull(report.getRowErrors(), "应该收集错误明细");
+        assertEquals(report.getErrorRows(), report.getRowErrors().size(), 
+                "错误明细数量应该等于 errorRows");
+        
+        log.info("=== 验证通过 ===");
+        log.info("统计结果正确: totalRows={}, successRows={}, errorRows={}", 
+                report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
+    }
 }
