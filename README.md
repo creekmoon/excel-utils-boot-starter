@@ -20,17 +20,17 @@
 <dependency>
     <groupId>cn.creekmoon</groupId>
     <artifactId>excel-utils-boot-starter</artifactId>
-    <version>2.3.0</version>
+    <version>2.3.1</version>
 </dependency>
 ```
 
 > ⚠️ 从 2.0.0 版本开始，基于 Spring Boot 3.0 (JDK 17) 开发
 
-### 2. 大版本升级说明（v2.3.0+）
+### 2. 大版本升级说明（v2.3.1+）
 
 **Breaking Changes：**
 
-从 v2.3.0 开始，导入功能进行了架构升级，以更好地支持 API/JSON 场景：
+从 v2.3.1 开始，导入功能进行了架构升级，以更好地支持 API/JSON 场景：
 
 1. **移除** `TitleReader.rowIndex2msg`  
    - 替代方案：使用 `ImportReport` 获取结构化导入结果
@@ -409,7 +409,7 @@ public void importSchoolData(MultipartFile file, HttpServletResponse response) {
 
 ### 场景七：直接返回 JSON 结果（无需 response）
 
-**v2.3.0+ 新特性**：很多 API 场景只需要返回导入结果的 JSON，不需要生成 Excel 回写文件。
+**v2.3.1+ 新特性**：很多 API 场景只需要返回导入结果的 JSON，不需要生成 Excel 回写文件。
 
 ```java
 @PostMapping("/api/import/users")
@@ -709,10 +709,10 @@ for (User user : users) {
 调用 `response()` 方法后，系统会自动生成一个包含导入结果的Excel文件：
 
 - 在原始数据右侧添加"导入结果"列
-- **v2.3.0+ 变化**：默认只显示失败行的原因，成功行留空（节省内存，适合大文件）
+- **v2.3.1+ 变化**：默认只显示失败行的原因，成功行留空（节省内存，适合大文件）
 - 失败的数据会保留原始内容，便于用户修改后重新导入
 
-#### 结果状态说明（v2.3.0+）
+#### 结果状态说明（v2.3.1+）
 
 | 错误码 | 含义 | 何时出现 |
 |---------|------|---------|
