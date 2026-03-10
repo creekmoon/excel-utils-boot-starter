@@ -133,6 +133,7 @@ public class ExcelExport {
     public void response(HttpServletResponse response) throws IOException {
         File file = this.stopWrite();
         ExcelFileUtils.response(file, excelName, response);
+        ExcelFileUtils.cleanTempFileByPathDelay(file);
     }
 
 

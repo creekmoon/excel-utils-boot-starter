@@ -206,6 +206,7 @@ public class ExcelImport {
         
         File file = generateResultFile();
         ExcelFileUtils.response(file, taskId + ".xlsx", response);
+        ExcelFileUtils.cleanTempFileByPathDelay(file);
         return this;
     }
 
