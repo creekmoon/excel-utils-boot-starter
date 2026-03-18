@@ -282,7 +282,7 @@ public class ExcelImport {
                     }
                     
                     // 如果存在全局错误且没有行错误，至少写一条全局错误提示
-                    if (report.getGlobalErrorMessage() != null 
+                    if (report.hasGlobalErrors()
                             && (report.getRowErrors() == null || report.getRowErrors().isEmpty())) {
                         Integer targetRowIndex = report.getProcessedFirstRowIndex() != null 
                                 ? report.getProcessedFirstRowIndex() 
@@ -292,7 +292,7 @@ public class ExcelImport {
                             dataRow = sheet.createRow(targetRowIndex);
                         }
                         Cell cell = dataRow.createCell(msgTitleColumnIndex);
-                        cell.setCellValue(report.getGlobalErrorMessage());
+                        cell.setCellValue(report.getGlobalErrorDisplayMessage());
                     }
                 }
             }

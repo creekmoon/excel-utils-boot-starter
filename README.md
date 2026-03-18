@@ -20,7 +20,7 @@
 <dependency>
     <groupId>cn.creekmoon</groupId>
     <artifactId>excel-utils-boot-starter</artifactId>
-    <version>2.3.2</version>
+    <version>2.4.0</version>
 </dependency>
 ```
 
@@ -53,7 +53,7 @@ reader.rowIndex2msg.get(rowIndex);  // ❌
 // 新版
 ImportReport<User> report = reader.getReport();
 report.getRowErrors();  // ✅ 获取行级错误
-report.getGlobalErrorMessage();  // ✅ 获取全局错误
+report.getGlobalErrors();  // ✅ 获取导入全局错误
 ```
 
 详见后续章节：**导入场景 - 场景七：直接返回 JSON 结果（无需 response）**
@@ -440,18 +440,15 @@ public ResponseEntity<ImportReport<User>> importUsersApi(@RequestParam("file") M
   "totalRows": 150,
   "successRows": 145,
   "errorRows": 5,
-  "globalErrorCode": null,
-  "globalErrorMessage": null,
+  "globalErrors": [],
   "rowErrors": [
     {
       "rowIndex": 23,
-      "code": "VALIDATION_ERROR",
       "message": "[失败!]字段[年龄]解析失败！不支持的数据格式!",
       "field": null
     },
     {
       "rowIndex": 45,
-      "code": "VALIDATION_ERROR",
       "message": "[失败!]字段[邮箱]为必填项!",
       "field": "邮箱"
     }
@@ -493,8 +490,7 @@ ImportReport<User> report = excelImport.switchSheet(0, User::new)
   "totalRows": 0,
   "successRows": 0,
   "errorRows": 0,
-  "globalErrorCode": "TEMPLATE_MISMATCH",
-  "globalErrorMessage": "导入的模板有误,请检查您的文件!",
+  "globalErrors": ["TEMPLATE_MISMATCH"],
   "rowErrors": []
 }
 ```
@@ -712,14 +708,13 @@ for (User user : users) {
 - **v2.3.1+ 变化**：默认只显示失败行的原因，成功行留空（节省内存，适合大文件）
 - 失败的数据会保留原始内容，便于用户修改后重新导入
 
-#### 结果状态说明（v2.3.1+）
+#### 导入全局错误说明（v2.3.1+）
 
-| 错误码 | 含义 | 何时出现 |
+| 全局错误枚举 | 含义 | 何时出现 |
 |---------|------|---------|
 | `TEMPLATE_MISMATCH` | 模板不匹配 | Excel 标题列与配置的列不一致 |
-| `VALIDATION_ERROR` | 数据验证失败 | 类型转换失败、必填项为空等 |
-| `FATAL` | 致命错误 | 非预期异常导致读取中断 |
 | `ERROR_LIMIT_REACHED` | 错误阈值触发 | 错误行数达到配置的上限 |
+| `IMPORT_INTERRUPTED` | 导入中断 | 非预期异常导致读取中断 |
 
 **导入结果列内容示例：**
 

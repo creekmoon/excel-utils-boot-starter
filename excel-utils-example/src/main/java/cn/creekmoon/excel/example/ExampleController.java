@@ -250,8 +250,8 @@ public class ExampleController {
         log.info("导入完成：总计 {} 条，成功 {} 条，失败 {} 条", 
                  report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
         
-        if (report.getGlobalErrorCode() != null) {
-            log.warn("全局错误：{} - {}", report.getGlobalErrorCode(), report.getGlobalErrorMessage());
+        if (report.hasGlobalErrors()) {
+            log.warn("全局错误：{} - {}", report.getGlobalErrors(), report.getGlobalErrorDisplayMessage());
         }
         
         // 生成带有验证结果的 Excel 文件

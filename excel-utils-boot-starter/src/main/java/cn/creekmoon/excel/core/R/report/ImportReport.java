@@ -3,7 +3,10 @@ package cn.creekmoon.excel.core.R.report;
 import lombok.Data;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Excel导入结果报告（结构化，支持JSON序列化）
@@ -70,14 +73,9 @@ public class ImportReport<R> {
     private int errorRows = 0;
 
     /**
-     * 全局错误码（如模板不匹配、错误阈值触发、致命异常等）
+     * 导入全局错误集合（如模板不匹配、错误阈值触发、导入中断等）
      */
-    private String globalErrorCode;
-
-    /**
-     * 全局错误消息
-     */
-    private String globalErrorMessage;
+    private Set<ImportGlobalErrorEnum> globalErrors = new LinkedHashSet<>();
 
     /**
      * 行级错误明细列表
@@ -89,6 +87,24 @@ public class ImportReport<R> {
      */
     private List<R> data;
 
+    public boolean hasGlobalErrors() {
+        return globalErrors != null && !globalErrors.isEmpty();
+    }
+
+    public List<String> getGlobalErrorMessages() {
+        if (!hasGlobalErrors()) {
+            return new ArrayList<>();
+        }
+        return globalErrors.stream().map(ImportGlobalErrorEnum::getMessage).collect(Collectors.toList());
+    }
+
+    public String getGlobalErrorDisplayMessage() {
+        if (!hasGlobalErrors()) {
+            return null;
+        }
+        return String.join("；", getGlobalErrorMessages());
+    }
+
 
     /**
      * 行级错误详情
@@ -99,11 +115,6 @@ public class ImportReport<R> {
          * 行号（0-based）
          */
         private int rowIndex;
-
-        /**
-         * 错误码（如 TEMPLATE_MISMATCH / VALIDATION_ERROR / FATAL）
-         */
-        private String code;
 
         /**
          * 错误消息
@@ -120,15 +131,13 @@ public class ImportReport<R> {
          */
         private String raw;
 
-        public RowError(int rowIndex, String code, String message) {
+        public RowError(int rowIndex, String message) {
             this.rowIndex = rowIndex;
-            this.code = code;
             this.message = message;
         }
 
-        public RowError(int rowIndex, String code, String message, String field) {
+        public RowError(int rowIndex, String message, String field) {
             this.rowIndex = rowIndex;
-            this.code = code;
             this.message = message;
             this.field = field;
         }

@@ -3,6 +3,7 @@ package cn.creekmoon.excel.core.R.reader.title;
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
+import cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum;
 import cn.creekmoon.excel.core.R.report.ImportOptions;
 import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.util.ExcelConstants;
@@ -213,8 +214,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
             log.error("SaxReader读取Excel文件异常, sheetRid={}, sheetName={}", sheetRid, sheetName, e);
             // 记录到 report
             if (super.report != null && !GlobalExceptionMsgManager.isCustomException((Exception) e)) {
-                super.report.setGlobalErrorCode("FATAL");
-                super.report.setGlobalErrorMessage(GlobalExceptionMsgManager.getExceptionMsg((Exception) e));
+                addGlobalError(ImportGlobalErrorEnum.IMPORT_INTERRUPTED);
             }
         } finally {
             /*释放信号量*/
@@ -270,7 +270,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
     private R rowConvert(Map<String, String> row) throws Exception {
         /*模板一致性检查已前置到标题行，这里检查标记即可*/
         if (TEMPLATE_CONSISTENCY_CHECK_FAILED) {
-            throw new CheckedExcelException(TITLE_CHECK_ERROR);
+            throw new CheckedExcelException(ImportGlobalErrorEnum.TEMPLATE_MISMATCH.getMessage());
         }
 
         /*过滤空白行*/
@@ -347,8 +347,7 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                         
                         if (!templateConsistencyCheck(targetTitles, sourceTitles)) {
                             // 模板不匹配
-                            report.setGlobalErrorCode("TEMPLATE_MISMATCH");
-                            report.setGlobalErrorMessage(TITLE_CHECK_ERROR);
+                            addGlobalError(ImportGlobalErrorEnum.TEMPLATE_MISMATCH);
                             
                             // 如果配置了 fail-fast，立即终止
                             if (options != null && options.isFailFastOnTemplateMismatch()) {
@@ -431,23 +430,20 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
                     report.setErrorRows(report.getErrorRows() + 1);
                     
                     // 收集错误明细
-                    if (options != null && options.isCollectRowErrors()) {
-                        String errorCode = determineErrorCode(e);
-                        report.getRowErrors().add(new ImportReport.RowError((int) rowIndex, errorCode, exceptionMsg));
+                    if (options != null && options.isCollectRowErrors() && !isTemplateMismatchException(e)) {
+                        report.getRowErrors().add(new ImportReport.RowError((int) rowIndex, exceptionMsg));
                     }
                     
                     // 检查错误阈值
                     if (options != null && options.getMaxErrorRows() != null 
                             && report.getErrorRows() >= options.getMaxErrorRows()) {
-                        report.setGlobalErrorCode("ERROR_LIMIT_REACHED");
-                        report.setGlobalErrorMessage("错误行数达到阈值 " + options.getMaxErrorRows() + "，已停止读取");
+                        addGlobalError(ImportGlobalErrorEnum.ERROR_LIMIT_REACHED);
                         throw new StopReadException();
                     }
                     
                     //如果是非自定义异常,中断读取
                     if (!GlobalExceptionMsgManager.isCustomException(e)) {
-                        report.setGlobalErrorCode("FATAL");
-                        report.setGlobalErrorMessage(exceptionMsg);
+                        addGlobalError(ImportGlobalErrorEnum.IMPORT_INTERRUPTED);
                         throw new RuntimeException(e);
                     }
                 }
@@ -490,17 +486,15 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         return this;
     }
 
-    /**
-     * 根据异常类型确定错误码
-     */
-    private String determineErrorCode(Exception e) {
-        if (e instanceof CheckedExcelException) {
-            String msg = e.getMessage();
-            if (msg != null && msg.contains(TITLE_CHECK_ERROR)) {
-                return "TEMPLATE_MISMATCH";
-            }
-            return "VALIDATION_ERROR";
+    private boolean isTemplateMismatchException(Exception e) {
+        return e instanceof CheckedExcelException
+                && StrUtil.equals(e.getMessage(), ImportGlobalErrorEnum.TEMPLATE_MISMATCH.getMessage());
+    }
+
+    private void addGlobalError(ImportGlobalErrorEnum globalError) {
+        if (report.getGlobalErrors() == null) {
+            report.setGlobalErrors(new LinkedHashSet<>());
         }
-        return "FATAL";
+        report.getGlobalErrors().add(globalError);
     }
 }

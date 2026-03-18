@@ -5,6 +5,7 @@ import cn.creekmoon.excel.core.R.converter.DateConverter;
 import cn.creekmoon.excel.core.R.converter.IntegerConverter;
 import cn.creekmoon.excel.core.R.converter.LocalDateTimeConverter;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
+import cn.creekmoon.excel.example.config.exception.MyNewException;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.ExcelFileUtils;
 import cn.hutool.core.io.FileUtil;
@@ -312,7 +313,9 @@ class ExcelImportTest {
                 .readWithReport(options);
         
         // 验证模板错误
-        assertEquals("TEMPLATE_MISMATCH", report.getGlobalErrorCode(), "应该检测到模板不匹配");
+        assertTrue(report.getGlobalErrors().contains(
+                cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum.TEMPLATE_MISMATCH
+        ), "应该检测到模板不匹配");
         assertEquals(0, report.getSuccessRows(), "fail-fast 模式下不应有成功行");
     }
 
@@ -347,7 +350,7 @@ class ExcelImportTest {
         assertEquals(0, report.getErrorRows(), "错误行数应为0");
         assertEquals(1000, report.getTotalRows(), "总行数应为1000");
         assertNull(report.getData(), "未配置收集成功数据，应为null");
-        assertNull(report.getGlobalErrorCode(), "无全局错误");
+        assertTrue(report.getGlobalErrors().isEmpty(), "无全局错误");
     }
 
     /**
@@ -375,8 +378,41 @@ class ExcelImportTest {
         
         // 验证错误阈值触发
         assertTrue(report.getErrorRows() >= 5, "错误数应达到或超过阈值");
-        assertEquals("ERROR_LIMIT_REACHED", report.getGlobalErrorCode(), "应该触发错误阈值");
+        assertTrue(report.getGlobalErrors().contains(
+                cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum.ERROR_LIMIT_REACHED
+        ), "应该触发错误阈值");
         assertTrue(report.getTotalRows() < 1000, "应该提前终止，不读完全部");
+    }
+
+    /**
+     * 测试模板错误与错误阈值可同时存在
+     */
+    @Test
+    void importReportMultipleGlobalErrorsTest() throws Exception {
+        /*读取导入文件*/
+        String IMPORT_FILE_NAME = "import-demo-1000.xlsx";
+        InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
+        MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
+
+        ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
+
+        cn.creekmoon.excel.core.R.report.ImportOptions options = new cn.creekmoon.excel.core.R.report.ImportOptions();
+        options.setFailFastOnTemplateMismatch(false);
+        options.setMaxErrorRows(5);
+        options.setCollectRowErrors(true);
+
+        cn.creekmoon.excel.core.R.report.ImportReport<Student> report = excelImport
+                .switchSheet(0, Student::new)
+                .addConvert("不存在的标题", Student::setUserName)
+                .readWithReport(options);
+
+        assertTrue(report.getGlobalErrors().contains(
+                cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum.TEMPLATE_MISMATCH
+        ), "应该保留模板错误");
+        assertTrue(report.getGlobalErrors().contains(
+                cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum.ERROR_LIMIT_REACHED
+        ), "应该保留错误阈值错误");
+        assertTrue(report.getRowErrors().isEmpty(), "模板错误不应写入行级错误");
     }
 
     /**
@@ -449,6 +485,100 @@ class ExcelImportTest {
         
         // report 的 data 字段应为空（因为没有配置 collectSuccessData）
         assertNull(report.getData(), "未配置收集，data 应为 null");
+    }
+
+    /**
+     * 测试 customExceptions 配置的业务异常不会中断读取
+     */
+    @Test
+    void importCustomExceptionShouldNotInterruptReadTest() throws Exception {
+        /*读取导入文件*/
+        String IMPORT_FILE_NAME = "import-demo-1000.xlsx";
+        InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
+        MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
+
+        /*执行导入并在单行业务校验中抛出自定义异常*/
+        ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
+        AtomicInteger consumerVisitedRows = new AtomicInteger();
+        AtomicInteger lastVisitedRowIndex = new AtomicInteger(-1);
+        cn.creekmoon.excel.core.R.report.ImportReport<Student> report = excelImport
+                .switchSheet(0, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .read((rowIndex, student) -> {
+                    consumerVisitedRows.incrementAndGet();
+                    lastVisitedRowIndex.set(rowIndex);
+                    if (rowIndex == 10) {
+                        throw new MyNewException("第11行触发业务校验异常");
+                    }
+                })
+                .getReport();
+
+        /*验证业务异常被记录为行错误, 但不会中断整体读取*/
+        assertEquals(1000, report.getTotalRows(), "totalRows 应该等于实际处理的行数");
+        assertEquals(999, report.getSuccessRows(), "除异常行外其余行应继续处理成功");
+        assertEquals(1, report.getErrorRows(), "只应记录一条业务异常");
+        assertEquals(report.getTotalRows(), report.getSuccessRows() + report.getErrorRows(),
+                "totalRows 应该等于 successRows + errorRows");
+        assertEquals(1000, consumerVisitedRows.get(), "consumer 应继续执行到最后一行");
+        assertEquals(1000, lastVisitedRowIndex.get(), "最后一行应仍然被处理到");
+        assertNotNull(report.getRowErrors(), "应该收集行级错误");
+        assertEquals(1, report.getRowErrors().size(), "行级错误应只有一条");
+        assertTrue(report.getRowErrors().get(0).getMessage().contains("第11行触发业务校验异常"),
+                "错误明细应包含业务异常信息");
+        assertFalse(report.getGlobalErrors().contains(
+                        cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum.IMPORT_INTERRUPTED),
+                "自定义业务异常不应被标记为导入中断");
+    }
+
+    /**
+     * 测试包装后的业务异常会被识别为导入中断
+     */
+    @Test
+    void importWrappedCustomExceptionShouldInterruptReadTest() throws Exception {
+        /*读取导入文件*/
+        String IMPORT_FILE_NAME = "import-demo-1000.xlsx";
+        InputStream stream = ResourceUtil.getStream(IMPORT_FILE_NAME);
+        MockMultipartFile mockMultipartFile = new MockMultipartFile(IMPORT_FILE_NAME, stream);
+
+        /*执行导入并在业务异常外层包装 RuntimeException*/
+        ExcelImport excelImport = ExcelImport.create(mockMultipartFile);
+        AtomicInteger consumerVisitedRows = new AtomicInteger();
+        AtomicInteger lastVisitedRowIndex = new AtomicInteger(-1);
+        cn.creekmoon.excel.core.R.report.ImportReport<Student> report = excelImport
+                .switchSheet(0, Student::new)
+                .addConvert("用户名", Student::setUserName)
+                .addConvert("全名", Student::setFullName)
+                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
+                .addConvert("邮箱", Student::setEmail)
+                .addConvert("生日", DateConverter::parse, Student::setBirthday)
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .read((rowIndex, student) -> {
+                    consumerVisitedRows.incrementAndGet();
+                    lastVisitedRowIndex.set(rowIndex);
+                    if (rowIndex == 10) {
+                        throw new RuntimeException(new MyNewException("第11行触发包装后的业务异常"));
+                    }
+                })
+                .getReport();
+
+        /*验证包装后的异常会触发导入中断*/
+        assertEquals(10, report.getTotalRows(), "包装后的异常应在第11行触发后停止读取");
+        assertEquals(9, report.getSuccessRows(), "中断前只应有前9行成功");
+        assertEquals(1, report.getErrorRows(), "中断行应只记录一条错误");
+        assertEquals(report.getTotalRows(), report.getSuccessRows() + report.getErrorRows(),
+                "totalRows 应该等于 successRows + errorRows");
+        assertEquals(10, consumerVisitedRows.get(), "consumer 不应继续执行后续行");
+        assertEquals(10, lastVisitedRowIndex.get(), "最后处理到的应是中断行");
+        assertNotNull(report.getRowErrors(), "应该保留中断前的行级错误");
+        assertEquals(1, report.getRowErrors().size(), "行级错误应只有一条");
+        assertTrue(report.getGlobalErrors().contains(
+                        cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum.IMPORT_INTERRUPTED),
+                "包装后的异常应被标记为导入中断");
     }
 
     /**
