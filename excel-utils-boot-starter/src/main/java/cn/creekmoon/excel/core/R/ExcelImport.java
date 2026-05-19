@@ -168,9 +168,8 @@ public class ExcelImport {
             return this;
         }
         log.info("[文件导入]收到CSV格式的文件[{}],尝试转化为XLSX格式", this.sourceFile.getOriginalFilename());
-        /*获取CSV文件并尝试读取*/
         String filePath = ExcelFileUtils.generateXlsxAbsoluteFilePath(UUID.fastUUID().toString(true));
-        BigExcelWriter bigWriter = ExcelUtil.getBigWriter();
+        BigExcelWriter bigWriter = ExcelUtil.getBigWriter(filePath);
         try {
             CsvReader read = new CsvReader(new InputStreamReader(sourceFile.getInputStream()), null);
             Iterator<CsvRow> rowIterator = read.iterator();
@@ -179,13 +178,11 @@ public class ExcelImport {
             }
         } catch (Exception e) {
             log.error("[文件导入]csv转换异常!", e);
-            this.sourceFile = null;
+            throw e;
         } finally {
             bigWriter.close();
-            ExcelFileUtils.cleanTempFileByPathDelay(filePath, 120);
         }
 
-        /*将新的xlsx文件替换为当前的文件*/
         this.sourceFile = new MockMultipartFile("csv2xlsx.xlsx", FileUtil.getInputStream(filePath));
         return this;
     }

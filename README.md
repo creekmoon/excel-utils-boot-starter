@@ -20,7 +20,7 @@
 <dependency>
     <groupId>cn.creekmoon</groupId>
     <artifactId>excel-utils-boot-starter</artifactId>
-    <version>2.4.1</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
