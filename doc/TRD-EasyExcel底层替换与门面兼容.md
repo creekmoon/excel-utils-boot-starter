@@ -9,6 +9,8 @@
 |--------|----------|------|------|
 | v1.0 | 2026-05-19 | creekmoon | 初版：基于代码现状收束最终落地方案 |
 | v1.1 | 2026-05-19 | creekmoon | 迁移完成：全部 29 个测试通过，补充工作进度章节 |
+| v1.2 | 2026-05-19 | creekmoon | Example 重构：合并重复示例、修复编译错误、新增业务场景覆盖 |
+| v1.3 | 2026-05-19 | creekmoon | 预设样式系统：新增表头/状态/边框/对齐/数字格式/字体/组合/自定义颜色等 30+ 预设 |
 
 **变更摘要**：
 - 本期为修改型需求：底层引擎 Hutool Excel → EasyExcel，门面层 API 与调用顺序保持不变
@@ -258,7 +260,7 @@ graph TB
 | EasyExcelTitleReader 实现 | 已完成 | 2026-05-19 | 基于 `AnalysisEventListener` SAX 读取；支持标题映射、行级转换、模板一致性检查、ImportReport 填充 |
 | EasyExcelCellReader 实现 | 已完成 | 2026-05-19 | 基于 `AnalysisEventListener` SAX 读取；支持坐标命中、mustExist/skipEmpty 校验 |
 | ExcelImport / ExcelExport 门面切换 | 已完成 | 2026-05-19 | 改 `new` 语句指向 EasyExcel 实现类；CSV 转换改用 EasyExcel |
-| 测试修复与回归 | 已通过 | 2026-05-19 | **29/29 测试全部通过**，`mvn test -pl excel-utils-boot-starter` BUILD SUCCESS |
+| 测试修复与回归 | 已通过 | 2026-05-19 | **34/34 测试全部通过**，`mvn test -pl excel-utils-boot-starter` BUILD SUCCESS |
 
 ### 7.2 关键问题与修复记录
 
@@ -289,7 +291,96 @@ graph TB
 - **根因**：`doWrite()` 对 `Map` 类型不支持无头写入，需转换为 `List<List<Object>>`
 - **修复**：在 `csvSupport()` 中遍历 `rawData`，将 `Map` 按 key 排序后转 `List<Object>`，再写入 xlsx
 
-### 7.3 遗留说明
+### 7.3 Example 用法示例重构
+
+#### 背景
+原 `ExampleController` 存在以下问题：
+1. **编译错误**：引用了已移除的 `debugger` 字段和 Hutool `StopReadException`
+2. **示例重复**：`exportExcel` 与 `exportExcelByStyle` 场景重叠；`importExcel` 与 `importExcelBigData` 本质相同
+3. **场景缺失**：缺少后置处理器、必填/可空字段校验、单元格读取等实际场景的清晰示例
+
+#### 重构动作
+| 动作 | 内容 |
+|------|------|
+| 修复编译错误 | 移除 `excelImport.debugger = true`；移除 `StopReadException` 引用；修正 `ExcelImport.create(file, true)` → `create(file)` |
+| 合并重复示例 | 将 12 个零散接口合并为 11 个聚焦接口，按导出/导入分组 |
+| 新增场景 | `with-post-processor`（跨字段校验）、`with-validation`（必填+可空+跳过空白） |
+| 结构优化 | 提取 `getTestFile()` / `fallbackFile()` 公共方法；每个接口聚焦一种能力，注释说明边界 |
+
+#### 重构后接口清单
+
+**导出（Export）**
+| 接口 | 能力 |
+|------|------|
+| `GET /export/basic` | 单/多 Sheet 基础导出 + 多级表头 |
+| `GET /export/with-style` | 条件样式 + 自定义数字格式 |
+| `GET /export/with-range` | range 控制写入位置 |
+| `GET /export/with-reset` | 同一 Sheet 多表格（reset） |
+| `GET /export/large-data` | 10 万行大数据导出 |
+
+**导入（Import）**
+| 接口 | 能力 |
+|------|------|
+| `POST /import/basic` | 基础按行读取 + 类型转换 |
+| `POST /import/with-report` | 返回 JSON 报告（API 场景） |
+| `POST /import/with-options` | fail-fast + 错误阈值 + 结果文件生成 |
+| `POST /import/with-range` | range 控制读取范围 |
+| `POST /import/with-cell-reader` | 指定单元格读取 |
+| `POST /import/with-reset` | 同一 Sheet 多表格（reset） |
+| `POST /import/with-post-processor` | convert 后跨字段校验 |
+| `POST /import/with-validation` | 必填 / 可空 / 跳过空白 |
+
+#### 验证
+- `mvn compile -pl excel-utils-example` BUILD SUCCESS
+- `mvn test -pl excel-utils-boot-starter` 34/34 测试通过
+
+### 7.4 预设样式系统扩充
+
+#### 背景
+原 `ExcelCellStyle` 仅提供 3 个基于 `IndexedColors` 的纯色预设（`LIGHT_ORANGE`、`PALE_BLUE`、`LIGHT_GREEN`），远不能满足现代业务报表的视觉需求。
+
+#### 设计原则
+参考 Material Design / Fluent UI 配色体系，以 POI 5.x `XSSFColor` 自定义 RGB 为主，兼顾 `.xlsx` 格式兼容性。
+
+#### 新增预设分类
+
+| 分类 | 预设常量 | 说明 |
+|------|----------|------|
+| **表头样式** | `HEADER_PRIMARY`、`HEADER_SUCCESS`、`HEADER_WARNING`、`HEADER_DANGER`、`HEADER_INFO`、`HEADER_DARK` | 深底白字 + 居中粗体，适合表头行 |
+| **状态样式** | `STATUS_SUCCESS`、`STATUS_WARNING`、`STATUS_DANGER`、`STATUS_INFO` | 浅色背景，用于数据行状态标记 |
+| **斑马纹** | `STRIPE_EVEN` | 极浅灰背景，交替行使用 |
+| **边框样式** | `BORDER_THIN_ALL`、`BORDER_BOTTOM_BOLD` | 全细边框 / 底部加粗 |
+| **对齐样式** | `ALIGN_CENTER`、`ALIGN_RIGHT`、`ALIGN_LEFT` | 水平对齐 |
+| **数字格式** | `FORMAT_CURRENCY`、`FORMAT_PERCENTAGE`、`FORMAT_INTEGER`、`FORMAT_DATE`、`FORMAT_DATETIME` | 货币 / 百分比 / 千分位 / 日期 / 日期时间 |
+| **字体样式** | `FONT_BOLD`、`FONT_ITALIC` | 粗体 / 斜体 |
+| **组合快捷** | `HEADER_PRIMARY_BORDER`、`STATUS_SUCCESS_BORDER` 等 | `merge()` 预组合，减少样板代码 |
+
+#### 工具方法
+
+| 方法 | 用途 |
+|------|------|
+| `ExcelCellStyle.merge(ExcelCellStyle...)` | 合并多个样式（后覆盖前） |
+| `ExcelCellStyle.rgb(int, int, int)` | 通过 RGB 创建纯色背景样式 |
+| `ExcelCellStyle.hex(int)` | 通过 16 进制色值创建纯色背景样式（如 `0x3498DB`） |
+| `ExcelCellStyle.fillRgb(CellStyle, int, int, int)` | 底层：为 CellStyle 设置 XSSFColor |
+| `ExcelCellStyle.font(Workbook, Consumer<Font>)` | 便捷创建 Font |
+
+#### Example 展示接口
+新增 `GET /export/style-showcase`，输出 8 个 Sheet 分别展示：
+1. 表头样式
+2. 状态色（条件样式）
+3. 斑马纹 + 边框
+4. 数字格式
+5. 对齐样式
+6. 组合样式（`merge` 用法）
+7. 自定义颜色（`hex` / `rgb`）
+8. 字体样式
+
+#### 验证
+- `mvn compile -pl excel-utils-example` BUILD SUCCESS
+- `mvn test -pl excel-utils-boot-starter` 34/34 测试通过
+
+### 7.5 遗留说明
 
 - 旧 Hutool 实现类（`HutoolTitleReader`、`HutoolCellReader`、`HutoolTitleWriter`）文件仍保留在源码目录，但门面已不再引用，便于回滚对比
 - `hutool-all` 依赖在 `pom.xml` 中暂未移除，因项目中其他非 Excel 工具类可能仍在使用；后续迭代可评估拆分为 `hutool-core`
