@@ -23,9 +23,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/** 导出后再导入：端到端验证行列与字段不被破坏。 */
 @Slf4j
 class ImportExportRoundtripTest {
 
+    /** 600 行导出 → 内存 xlsx → 再导入，首尾行 age/email 与源数据一致。 */
     @Test
     void exportThenImport_roundtrip_preservesRowCountAndSampleFields() throws Exception {
         int targetCount = 600;
@@ -40,6 +42,7 @@ class ImportExportRoundtripTest {
         byte[] bytes = Files.readAllBytes(excelExport.stopWrite().toPath());
         log.info("[RESULT] exported bytes={}", bytes.length);
 
+        // POI 侧校验导出文件行数与首行单元格
         try (Workbook exportWorkbook = PoiWorkbookAssertions.open(new ByteArrayInputStream(bytes))) {
             Sheet sheet = exportWorkbook.getSheetAt(0);
             PoiWorkbookAssertions.assertRowCount(sheet, targetCount + 1);

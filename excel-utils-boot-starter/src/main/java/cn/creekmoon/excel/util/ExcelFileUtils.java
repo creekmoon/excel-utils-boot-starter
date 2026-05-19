@@ -2,19 +2,16 @@ package cn.creekmoon.excel.util;
 
 import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.W.ExcelExport;
-import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.io.IoUtil;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
-import org.springframework.util.ResourceUtils;
 
 import java.io.*;
-import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -74,15 +71,14 @@ public class ExcelFileUtils {
         response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
 
         /*使用流将文件传输回去*/
-        try (ServletOutputStream out = response.getOutputStream()) {
+        try (ServletOutputStream out = response.getOutputStream();
+             InputStream in = fileInputStream) {
             byte[] b = new byte[4096];  //创建数据缓冲区  通常网络2-8K 磁盘32K-64K
             int length;
-            while ((length = fileInputStream.read(b)) > 0) {
+            while ((length = in.read(b)) > 0) {
                 out.write(b, 0, length);
             }
             out.flush();
-        } finally {
-            IoUtil.close(fileInputStream);
         }
     }
 
@@ -110,7 +106,7 @@ public class ExcelFileUtils {
      */
     /*回应请求*/
     public static void response(String filePath, String fileName, HttpServletResponse response) throws IOException {
-        try (BufferedInputStream inputStream = FileUtil.getInputStream(filePath)) {
+        try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(filePath))) {
             response(inputStream, fileName, response);
         }
     }
@@ -132,7 +128,7 @@ public class ExcelFileUtils {
 
     public static void cleanTempFileByPathNow(String filePath) {
         try {
-            if (!FileUtil.del(filePath)) {
+            if (!Files.deleteIfExists(Paths.get(filePath))) {
                 log.warn("清理临时文件失败! 路径:" + filePath);
             }
             log.debug("清理临时文件成功!路径:" + filePath);

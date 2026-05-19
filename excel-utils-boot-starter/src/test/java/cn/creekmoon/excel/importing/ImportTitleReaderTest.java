@@ -12,7 +12,6 @@ import cn.creekmoon.excel.support.fixture.Student;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.ExcelFileUtils;
 import cn.creekmoon.excel.util.exception.CheckedExcelException;
-import cn.hutool.core.io.FileUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -30,12 +29,14 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** 表头行读取（TitleReader）：标准模板、回写、多 sheet、行范围。 */
 @Slf4j
 class ImportTitleReaderTest {
 
     @Nested
     class Smoke {
 
+        /** 1000 行标准模板：抽样行字段、报告统计、年龄分布聚合。 */
         @Test
         void importTitleReader_standardTemplate_parsesAllRowsWithCorrectStatistics() throws Exception {
             log.info("[STEP] load fixture={}", FixtureCatalog.STANDARD_IMPORT);
@@ -49,6 +50,7 @@ class ImportTitleReaderTest {
             ImportReportAssertions.logReportSummary(report);
 
             assertEquals(FixtureCatalog.totalDataRows(), dataList.size(), "parsed row count");
+            // 按 Excel 行号抽样（fixture 中预置期望值）
             for (int excelRow : new int[]{6, 80, 195, 631}) {
                 FixtureCatalog.SampleRow sample = FixtureCatalog.sampleRow(excelRow);
                 Student actual = dataList.get(sample.excelRowNumber() - 2);
@@ -69,16 +71,19 @@ class ImportTitleReaderTest {
             log.info("[DONE] standard import passed, rows={}", dataList.size());
         }
 
+        /** 业务校验失败：报告记错 + generateResultFile 在失败行写入「导入结果」列。 */
         @Test
         void importTitleReader_businessValidationFailure_writesResultColumnWithReason() throws Exception {
             log.info("[STEP] load fixture and import sheet0 as baseline");
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);
+            // 先读 sheet0，确保同一 ExcelImport 实例可继续切 sheet
             ImportTestHelper.bindStandardColumns(excelImport.switchSheet(0, Student::new)).getAll();
 
             log.info("[STEP] import sheet1 and inject business error on lisi@qq.com");
             TitleReader<Student> sheet2 = excelImport.switchSheet(1, Student::new)
                     .addConvert("生日", DateConverter::parse, Student::setBirthday)
                     .addConvert("邮箱", Student::setEmail);
+            // CheckedExcelException 会带 [失败!] 前缀，便于回写列展示
             sheet2.read(student -> {
                 if ("lisi@qq.com".equals(student.getEmail())) {
                     throw new CheckedExcelException("validation failed on lisi@qq.com");
@@ -94,7 +99,7 @@ class ImportTitleReaderTest {
 
             log.info("[STEP] generate result file");
             File file = excelImport.generateResultFile(false);
-            assertTrue(FileUtil.exist(file));
+            assertTrue(file.exists());
             try (Workbook workbook = PoiWorkbookAssertions.open(file)) {
                 Sheet errorSheet = workbook.getSheetAt(1);
                 Map<Integer, String> resultMessages = PoiWorkbookAssertions.readResultColumn(
@@ -116,6 +121,7 @@ class ImportTitleReaderTest {
     @Nested
     class Branch {
 
+        /** 同一文件内切换 sheet0/sheet1，各自独立计数并可生成结果文件。 */
         @Test
         void importTitleReader_multiSheetSwitch_parsesEachSheetIndependently() throws Exception {
             log.info("[STEP] import sheet0 with callback counter");
@@ -139,6 +145,7 @@ class ImportTitleReaderTest {
             log.info("[DONE] multi-sheet import passed");
         }
 
+        /** range(0,3,4)：仅读第 3、4 行数据（Excel 下标），共 2 条。 */
         @Test
         void importTitleReader_readRangeLimited_returnsRowsInsideRangeOnly() throws Exception {
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);
@@ -156,6 +163,7 @@ class ImportTitleReaderTest {
             log.info("[DONE] range-limited rows={}", students.size());
         }
 
+        /** getAll 后 getReport：列表条数与 success/total 统计一致。 */
         @Test
         void importTitleReader_getAllAndReport_keepsStatisticsConsistent() throws Exception {
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);

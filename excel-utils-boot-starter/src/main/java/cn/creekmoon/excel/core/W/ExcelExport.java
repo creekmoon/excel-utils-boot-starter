@@ -1,14 +1,11 @@
 package cn.creekmoon.excel.core.W;
 
 
-import cn.creekmoon.excel.core.W.title.HutoolTitleWriter;
+import cn.creekmoon.excel.core.W.title.EasyExcelTitleWriter;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
 import cn.creekmoon.excel.util.ExcelFileUtils;
 import cn.creekmoon.excel.util.exception.ExConsumer;
-import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.lang.UUID;
 import cn.hutool.core.map.BiMap;
-import cn.hutool.core.text.StrFormatter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +17,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -93,7 +91,7 @@ public class ExcelExport {
             return (TitleWriter<T>) sheetIndex2SheetWriter.get(sheetIndex);
         }
         if (!sheetIndex2SheetWriter.containsKey(sheetIndex - 1)) {
-            throw new RuntimeException(StrFormatter.format("切换sheet页失败,预期切换到sheet索引={}, 但当前最大索引下标sheet={},请检查代码并保证sheet页下标连续!"));
+            throw new RuntimeException(String.format("切换sheet页失败,预期切换到sheet索引=%d, 但当前最大索引下标sheet=%d,请检查代码并保证sheet页下标连续!", sheetIndex, sheetIndex2SheetWriter.size() - 1));
         }
         return switchNewSheet(newDataClass);
     }
@@ -103,7 +101,7 @@ public class ExcelExport {
      * 切换到新的标签页
      */
     public <T> TitleWriter<T> switchNewSheet(Class<T> newDataClass) {
-        HutoolTitleWriter<T> newTitleWriter = new HutoolTitleWriter<T>(this, sheetIndex2SheetWriter.size());
+        EasyExcelTitleWriter<T> newTitleWriter = new EasyExcelTitleWriter<>(this, sheetIndex2SheetWriter.size());
         sheetIndex2SheetWriter.put(newTitleWriter.getSheetIndex(), newTitleWriter);
         return newTitleWriter;
     }
@@ -112,7 +110,7 @@ public class ExcelExport {
      * 切换到新的标签页
      */
     public <T> TitleWriter<T> switchNewSheet(String sheetName, Class<T> newDataClass) {
-        HutoolTitleWriter<T> newTitleWriter = new HutoolTitleWriter<T>(this, sheetIndex2SheetWriter.size(),sheetName);
+        EasyExcelTitleWriter<T> newTitleWriter = new EasyExcelTitleWriter<T>(this, sheetIndex2SheetWriter.size(),sheetName);
         sheetIndex2SheetWriter.put(newTitleWriter.getSheetIndex(), newTitleWriter);
         return newTitleWriter;
     }

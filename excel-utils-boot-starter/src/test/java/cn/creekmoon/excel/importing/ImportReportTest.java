@@ -25,9 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** ImportReport / ImportOptions：统计、全局错误、错误阈值、业务异常策略。 */
 @Slf4j
 class ImportReportTest {
 
+    /** 注册测试用业务异常处理器，供自定义异常相关用例使用。 */
     @BeforeAll
     static void registerTestBizException() {
         ExcelUtilsConfig.addExcelUtilsExceptionHandler(new CustomExceptionHandler(TestBizException.class));
@@ -37,6 +39,7 @@ class ImportReportTest {
     @Nested
     class Smoke {
 
+        /** forApi 预设：fail-fast 模板、不收集成功数据、统计完整。 */
         @Test
         void importReport_apiPreset_returnsStructuredResultWithoutSuccessData() throws Exception {
             log.info("[STEP] readWithReport using ImportOptions.forApi()");
@@ -61,9 +64,11 @@ class ImportReportTest {
         }
     }
 
+    /** 分支：模板、阈值、异常包装、数据收集上限等。 */
     @Nested
     class Branch {
 
+        /** 模板列缺失 + failFast：立即停止，不扫数据行。 */
         @Test
         void importReport_templateMismatchFailFast_stopsImmediately() throws Exception {
             log.info("[STEP] configure missing title with failFast=true");
@@ -82,6 +87,7 @@ class ImportReportTest {
             log.info("[DONE] template mismatch fail-fast passed");
         }
 
+        /** 每行后置抛错，达 maxErrorRows=5 后提前终止并写入 ERROR_LIMIT_REACHED。 */
         @Test
         void importReport_errorLimitReached_stopsBeforeFullScan() throws Exception {
             log.info("[STEP] inject CheckedExcelException on every row with maxErrorRows=5");
@@ -106,6 +112,7 @@ class ImportReportTest {
             log.info("[DONE] error limit reached passed, scannedRows={}", report.getTotalRows());
         }
 
+        /** 模板不匹配时行错误不入 rowErrors，但可同时出现模板与阈值全局错误。 */
         @Test
         void importReport_templateMismatchAndErrorLimit_bothPresentInGlobalErrors() throws Exception {
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);
@@ -125,6 +132,7 @@ class ImportReportTest {
             log.info("[DONE] combined global errors passed");
         }
 
+        /** collectSuccessData + maxSuccessData：成功条数全量统计，对象列表最多 100 条。 */
         @Test
         void importReport_collectSuccessData_respectsMaxSuccessDataCap() throws Exception {
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);
@@ -145,6 +153,7 @@ class ImportReportTest {
             log.info("[DONE] success data cap passed, collected={}", report.getData().size());
         }
 
+        /** 已注册的 TestBizException：记错行但不中断，后续行继续读。 */
         @Test
         void importReport_customBizException_doesNotInterruptRemainingRows() throws Exception {
             AtomicInteger visited = new AtomicInteger();
@@ -170,6 +179,7 @@ class ImportReportTest {
             log.info("[DONE] custom biz exception non-interrupt passed");
         }
 
+        /** 业务异常包在 RuntimeException 内：视为非自定义异常，导入中断。 */
         @Test
         void importReport_wrappedBizException_marksImportInterrupted() throws Exception {
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);
@@ -191,6 +201,7 @@ class ImportReportTest {
             log.info("[DONE] wrapped biz exception interrupt passed");
         }
 
+        /** 年龄>90 抛 CheckedExcelException：total = success + error，行错误条数一致。 */
         @Test
         void importReport_statistics_totalEqualsSuccessPlusError() throws Exception {
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);
@@ -211,6 +222,7 @@ class ImportReportTest {
             log.info("[DONE] statistics consistency passed, errorRows={}", report.getErrorRows());
         }
 
+        /** forExcelResponse 预设：读全表、不 fail-fast，成功路径下 rowErrors 列表可初始化。 */
         @Test
         void importReport_excelResponsePreset_collectsRowErrorsOnSuccessPath() throws Exception {
             ExcelImport excelImport = ImportTestHelper.createImport(FixtureCatalog.STANDARD_IMPORT);

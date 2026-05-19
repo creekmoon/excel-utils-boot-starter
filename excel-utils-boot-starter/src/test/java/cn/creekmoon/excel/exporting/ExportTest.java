@@ -24,14 +24,17 @@ import static cn.creekmoon.excel.core.W.title.ext.ExcelCellStyle.LIGHT_ORANGE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** Excel 导出：多 sheet、多级表头、条件样式、reset 分段写。 */
 @Slf4j
 class ExportTest {
 
+    /** 「基本信息::列名」多级表头占用的行数（含分组行 + 子标题行）。 */
     private static final int MULTI_HEADER_DEPTH = 2;
 
     @Nested
     class Smoke {
 
+        /** 6 万 + 1 万行双 sheet：行数、分组表头、首行抽样单元格。 */
         @Test
         void export_multiSheetMultiLevelHeader_largeData_hasCorrectStructure() throws Exception {
             int sheet0Rows = 60_000;
@@ -77,6 +80,7 @@ class ExportTest {
     @Nested
     class Branch {
 
+        /** 两 sheet 交替 write，各自累计行数（各 2000 数据行 + 表头）。 */
         @Test
         void export_interleavedMultiSheetWrite_accumulatesRowCounts() throws Exception {
             ArrayList<Student> batch = StudentFixtures.createList(1_000);
@@ -104,6 +108,7 @@ class ExportTest {
             log.info("[DONE] interleaved export passed");
         }
 
+        /** 先写空列表（仅表头），再分批追加，数据从表头下一行起连续排列。 */
         @Test
         void export_emptyWriteThenAppend_startsDataAfterHeader() throws Exception {
             ArrayList<Student> batch = StudentFixtures.createList(10);
@@ -128,6 +133,7 @@ class ExportTest {
             log.info("[DONE] empty-then-append export passed");
         }
 
+        /** 多级表头：存在合并区，分组与子列标题文本正确。 */
         @Test
         void export_multiLevelHeader_hasMergedRegionsAndHeaderText() throws Exception {
             ArrayList<Student> batch = StudentFixtures.createList(1);
@@ -149,6 +155,7 @@ class ExportTest {
             log.info("[DONE] multi-level header export passed, mergedRegions verified");
         }
 
+        /** 条件样式：全名列匹配时填充 LIGHT_ORANGE 前景色。 */
         @Test
         void export_conditionalStyle_appliesForegroundColorWhenMatched() throws Exception {
             ArrayList<Student> batch = StudentFixtures.createList(3);
@@ -169,6 +176,7 @@ class ExportTest {
             log.info("[DONE] conditional style export passed");
         }
 
+        /** 同一 sheet 上 reset 切换 Student/Teacher 表结构，多段表格首尾相接。 */
         @Test
         void export_resetSameSheetMultipleSegments_writesAllTables() throws Exception {
             ArrayList<Student> students = StudentFixtures.createList(50);

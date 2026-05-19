@@ -1,8 +1,6 @@
 package cn.creekmoon.excel.core.R.converter;
 
-import cn.hutool.core.date.DateUtil;
-import cn.hutool.core.util.StrUtil;
-
+import java.text.SimpleDateFormat;
 import java.util.Date;
 
 /**
@@ -10,6 +8,8 @@ import java.util.Date;
  * Excel初次解析时，就会执行这个解析器。将所有数据都转成String
  */
 public class StringConverter {
+
+    private static final String DATE_FORMAT_PATTERN = "yyyy-MM-dd HH:mm:ss";
 
     /**
      * 全局默认数据转换器 将所有的数值都转换成String
@@ -22,10 +22,11 @@ public class StringConverter {
             return "";
         }
         if (value instanceof String) {
-            return StrUtil.trim((String) value);
+            String str = (String) value;
+            return str == null ? "" : str.trim();
         }
         if (value instanceof Date) {
-            return DateUtil.format((Date) value, "yyyy-MM-dd HH:mm:ss");
+            return new SimpleDateFormat(DATE_FORMAT_PATTERN).format((Date) value);
         }
         return String.valueOf(value);
     }

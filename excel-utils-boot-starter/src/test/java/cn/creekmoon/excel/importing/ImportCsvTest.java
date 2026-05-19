@@ -19,11 +19,13 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** CSV 导入：验证自动转 xlsx 后按表头读取。 */
 @Slf4j
 class ImportCsvTest {
 
     private static final int EXPECTED_CSV_DATA_ROWS = 3;
 
+    /** CSV 转 xlsx 后行数、字段与源文件一致。 */
     @Test
     void importCsv_convertToXlsxThenRead_rowCountAndFieldsMatchSource() throws Exception {
         MockMultipartFile csvFile = ImportTestHelper.loadFixture("import-demo.csv");
@@ -31,6 +33,7 @@ class ImportCsvTest {
         long csvDataRows = csvText.lines().skip(1).filter(line -> !line.isBlank()).count();
         log.info("[STEP] csv fixture loaded, header+data lines={}, expectedDataRows={}", csvText.lines().count(), csvDataRows);
 
+        // 以 CSV 类型上传，触发 ExcelImport 内部转 xlsx
         MockMultipartFile multipartFile = new MockMultipartFile(
                 "import-demo.csv", "import-demo.csv", "text/csv", csvFile.getBytes());
 
@@ -58,6 +61,7 @@ class ImportCsvTest {
             assertEquals("user" + i + "@qq.com", student.getEmail());
         }
 
+        // 转换后的 xlsx 应含表头 + 3 行数据
         try (Workbook workbook = PoiWorkbookAssertions.open(
                 new java.io.ByteArrayInputStream(excelImport.sourceFile.getInputStream().readAllBytes()))) {
             PoiWorkbookAssertions.assertRowCount(workbook.getSheetAt(0), EXPECTED_CSV_DATA_ROWS + 1);

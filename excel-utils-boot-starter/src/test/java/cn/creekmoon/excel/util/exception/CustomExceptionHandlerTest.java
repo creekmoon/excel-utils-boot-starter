@@ -9,9 +9,11 @@ import java.lang.reflect.InvocationTargetException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/** CustomExceptionHandler：按类名匹配，不依赖 instanceof（兼容多 ClassLoader）。 */
 @Slf4j
 class CustomExceptionHandlerTest {
 
+    /** 同名类不同 ClassLoader：isInstance 为 false，但 handler 仍能识别并取消息。 */
     @Test
     void customExceptionHandler_sameClassNameAcrossClassLoaders_matchesAndExtractsMessage() throws Exception {
         log.info("[STEP] create handler for CrossLoaderBizException");
@@ -28,6 +30,7 @@ class CustomExceptionHandlerTest {
         log.info("[DONE] cross classloader match passed");
     }
 
+    /** 只匹配异常本身类型，不沿 cause 链向下查找。 */
     @Test
     void customExceptionHandler_wrappedCause_doesNotMatchOuterException() {
         log.info("[STEP] wrap biz exception inside RuntimeException");
@@ -59,12 +62,14 @@ class CustomExceptionHandlerTest {
         }
     }
 
+    /** 测试用业务异常（与生产侧「同名不同加载器」场景对齐）。 */
     static class CrossLoaderBizException extends Exception {
         public CrossLoaderBizException(String message) {
             super(message);
         }
     }
 
+    /** 仅对目标类走 defineClass，其余委托父加载器。 */
     static class CrossLoaderClassLoader extends ClassLoader {
 
         private final String targetClassName;

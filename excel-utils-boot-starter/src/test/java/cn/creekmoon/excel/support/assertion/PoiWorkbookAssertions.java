@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** 基于 Apache POI 打开导出/回写文件并做结构断言（与 Hutool 写入解耦）。 */
 public final class PoiWorkbookAssertions {
 
     private PoiWorkbookAssertions() {
@@ -53,6 +54,7 @@ public final class PoiWorkbookAssertions {
         return maxRow + 1;
     }
 
+    /** 按字符串比较单元格（数值格会先转成整数字符串）。 */
     public static void assertCellString(Sheet sheet, int rowIndex, int colIndex, String expected) {
         assertEquals(expected, readCellAsString(sheet, rowIndex, colIndex));
     }
@@ -94,6 +96,7 @@ public final class PoiWorkbookAssertions {
                 "单元格(" + rowIndex + "," + colIndex + ")前景色不符合预期");
     }
 
+    /** 读取「导入结果」列：行号 → 回写消息（跳过空白格）。 */
     public static Map<Integer, String> readResultColumn(Sheet sheet, int titleRowIndex, String resultTitle) {
         int resultCol = findHeaderColumnIndex(sheet, titleRowIndex, resultTitle);
         Map<Integer, String> rowIndex2Message = new HashMap<>();

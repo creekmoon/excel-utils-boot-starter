@@ -11,9 +11,14 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 测试 fixture 元数据：启动时用 POI 预读行数、抽样行、单元格期望值，避免用例内硬编码。
+ */
 public final class FixtureCatalog {
 
+    /** 标准表头导入（约 1000 行数据）。 */
     public static final String STANDARD_IMPORT = "import-demo-1000.xlsx";
+    /** 单元格坐标读取专用（含合并区 sheet）。 */
     public static final String CELL_READ_IMPORT = "import-demo-cell-read.xlsx";
 
     private static int totalDataRows;

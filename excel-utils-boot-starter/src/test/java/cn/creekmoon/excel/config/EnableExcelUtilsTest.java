@@ -21,9 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/** @EnableExcelUtils 相关全局配置：并行度、临时文件、信号量。 */
 @Slf4j
 class EnableExcelUtilsTest {
 
+    /** 模拟注解生效后的 ExcelUtilsConfig 默认值。 */
     @BeforeEach
     void applyEnableExcelUtilsDefaults() {
         ExcelUtilsConfig.importParallelSemaphore = new Semaphore(2);
@@ -32,6 +34,7 @@ class EnableExcelUtilsTest {
         log.info("[SETUP] applied EnableExcelUtils defaults: parallel=2, tempLifeMinutes=1");
     }
 
+    /** 并行信号量许可数=2，临时文件生命周期=1 分钟。 */
     @Test
     void enableExcelUtils_annotationConfig_appliesParallelAndTempFileSettings() {
         log.info("[ASSERT] semaphorePermits={}, tempFileLifeMinutes={}",
@@ -42,6 +45,9 @@ class EnableExcelUtilsTest {
         log.info("[DONE] config values verified");
     }
 
+    /**
+     * 3 个线程并发导入，信号量仅 2：后启动任务应排队，最终处理行数 = 1000×3。
+     */
     @Test
     void importParallel_exceedsMaxParallel_allTasksEventuallyComplete() throws Exception {
         int parallelWorkers = 3;
@@ -72,6 +78,7 @@ class EnableExcelUtilsTest {
             });
         }
 
+        // 同时放行所有任务，竞争信号量
         startLatch.countDown();
         assertTrue(doneLatch.await(120, TimeUnit.SECONDS));
         executor.shutdown();

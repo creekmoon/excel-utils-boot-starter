@@ -1,7 +1,5 @@
 package cn.creekmoon.excel.core.W.title.ext;
 
-import cn.hutool.core.util.ArrayUtil;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -59,7 +57,13 @@ public class Title {
         depth2Title.put(1, this);
         if (titleName.contains(PARENT_TITLE_SEPARATOR)) {
             //倒序  源: titleParentParent::titleParent::title  转换后 [title,titleParent,titleParentParent]
-            String[] split = ArrayUtil.reverse(titleName.split(PARENT_TITLE_SEPARATOR));
+            String[] split = titleName.split(PARENT_TITLE_SEPARATOR);
+            // 反转数组
+            for (int i = 0; i < split.length / 2; i++) {
+                String temp = split[i];
+                split[i] = split[split.length - 1 - i];
+                split[split.length - 1 - i] = temp;
+            }
             this.titleName = split[0];
 
             Title currentTitle = this;

@@ -2,19 +2,14 @@ package cn.creekmoon.excel.core.R;
 
 import cn.creekmoon.excel.core.R.reader.Reader;
 import cn.creekmoon.excel.core.R.reader.cell.CellReader;
-import cn.creekmoon.excel.core.R.reader.cell.HutoolCellReader;
-import cn.creekmoon.excel.core.R.reader.title.HutoolTitleReader;
+import cn.creekmoon.excel.core.R.reader.cell.EasyExcelCellReader;
+import cn.creekmoon.excel.core.R.reader.title.EasyExcelTitleReader;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.ExcelFileUtils;
-import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.lang.UUID;
 import cn.hutool.core.map.BiMap;
-import cn.hutool.core.text.csv.CsvReader;
-import cn.hutool.core.text.csv.CsvRow;
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.poi.excel.BigExcelWriter;
-import cn.hutool.poi.excel.ExcelUtil;
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.support.ExcelTypeEnum;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -58,7 +53,7 @@ public class ExcelImport {
      */
     public boolean debugger = false;
     /*唯一识别名称 会同步生成一份文件到临时目录*/
-    public String taskId = UUID.fastUUID().toString();
+    public String taskId = java.util.UUID.randomUUID().toString();
     String resultFilePath = ExcelFileUtils.generateXlsxAbsoluteFilePath(taskId);
 
     /*当前导入的文件*/
@@ -116,7 +111,7 @@ public class ExcelImport {
         }
 
         //新增读取器，传递rId和sheetName
-        HutoolTitleReader<T> reader = new HutoolTitleReader<>(this, rId, sheetName, supplier);
+        EasyExcelTitleReader<T> reader = new EasyExcelTitleReader<>(this, rId, sheetName, supplier);
         this.allReaders.add(reader);
         return reader;
     }
@@ -149,7 +144,7 @@ public class ExcelImport {
         }
 
         //新增读取器，传递rId和sheetName
-        HutoolCellReader<T> reader = new HutoolCellReader<>(this, rId, sheetName, supplier);
+        EasyExcelCellReader<T> reader = new EasyExcelCellReader<>(this, rId, sheetName, supplier);
         this.allReaders.add(reader);
         return reader;
     }
@@ -162,28 +157,45 @@ public class ExcelImport {
      */
     @SneakyThrows
     protected ExcelImport csvSupport() {
-
-        if (StrUtil.isBlank(this.sourceFile.getOriginalFilename()) || !this.sourceFile.getOriginalFilename().toLowerCase().contains(".csv")) {
+        String originalFilename = this.sourceFile.getOriginalFilename();
+        if (originalFilename == null || originalFilename.trim().isEmpty()
+                || !originalFilename.toLowerCase().contains(".csv")) {
             /*如果不是csv文件 跳过这个方法*/
             return this;
         }
-        log.info("[文件导入]收到CSV格式的文件[{}],尝试转化为XLSX格式", this.sourceFile.getOriginalFilename());
-        String filePath = ExcelFileUtils.generateXlsxAbsoluteFilePath(UUID.fastUUID().toString(true));
-        BigExcelWriter bigWriter = ExcelUtil.getBigWriter(filePath);
+        log.info("[文件导入]收到CSV格式的文件[{}],尝试转化为XLSX格式", originalFilename);
+        String filePath = ExcelFileUtils.generateXlsxAbsoluteFilePath(java.util.UUID.randomUUID().toString());
+
         try {
-            CsvReader read = new CsvReader(new InputStreamReader(sourceFile.getInputStream()), null);
-            Iterator<CsvRow> rowIterator = read.iterator();
-            while (rowIterator.hasNext()) {
-                bigWriter.writeRow(rowIterator.next().getRawList());
+            List<Object> rawData = EasyExcel.read(sourceFile.getInputStream())
+                    .excelType(ExcelTypeEnum.CSV)
+                    .sheet()
+                    .headRowNumber(0)
+                    .doReadSync();
+            List<List<Object>> csvData = new ArrayList<>();
+            for (Object row : rawData) {
+                if (row instanceof Map) {
+                    Map<Integer, Object> map = (Map<Integer, Object>) row;
+                    List<Object> list = new ArrayList<>();
+                    map.entrySet().stream()
+                            .sorted(Map.Entry.comparingByKey())
+                            .forEach(entry -> list.add(entry.getValue()));
+                    csvData.add(list);
+                } else if (row instanceof List) {
+                    csvData.add((List<Object>) row);
+                } else {
+                    List<Object> list = new ArrayList<>();
+                    list.add(row);
+                    csvData.add(list);
+                }
             }
+            EasyExcel.write(filePath).sheet().doWrite(csvData);
         } catch (Exception e) {
             log.error("[文件导入]csv转换异常!", e);
             throw e;
-        } finally {
-            bigWriter.close();
         }
 
-        this.sourceFile = new MockMultipartFile("csv2xlsx.xlsx", FileUtil.getInputStream(filePath));
+        this.sourceFile = new MockMultipartFile("csv2xlsx.xlsx", new FileInputStream(filePath));
         return this;
     }
 
@@ -228,7 +240,7 @@ public class ExcelImport {
         String absoluteFilePath = resultFilePath;
 
         try (Workbook workbook = new XSSFWorkbook(sourceFile.getInputStream());
-             BufferedOutputStream outputStream = FileUtil.getOutputStream(absoluteFilePath)) {
+             BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(absoluteFilePath))) {
             for (Reader<?> reader : allReaders) {
                 Sheet sheet = workbook.getSheet(reader.sheetName);
                 if (reader instanceof TitleReader<?> titleReader) {
@@ -296,7 +308,7 @@ public class ExcelImport {
             workbook.write(outputStream);
             outputStream.flush();
         }
-        return FileUtil.file(absoluteFilePath);
+        return new File(absoluteFilePath);
     }
 
     /**

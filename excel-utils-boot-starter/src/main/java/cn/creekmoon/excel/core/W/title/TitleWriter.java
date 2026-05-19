@@ -78,7 +78,7 @@ public abstract class TitleWriter<R> extends Writer {
     }
 
 
-    public abstract <T> HutoolTitleWriter<T> reset(Class<T> newDataClass, int rowIndexOffset);
+    public abstract <T> TitleWriter<T> reset(Class<T> newDataClass, int rowIndexOffset);
 
     public abstract int countTitles();
 
