@@ -113,10 +113,8 @@ public class EasyExcelCellReader<R> extends CellReader<R> {
         try {
             /* 模板一致性检查：获取声明的所有 CELL，读取到命中后移除 */
             Set<String> templateConsistencyCheckCells = new HashSet<>();
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][EasyExcelCellReader.read] 开始读取sheet: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[EasyExcelCellReader] 开始读取sheet: rId={}, sheetName={}",
+                    sheetRid, sheetName);
 
             currentNewObject = newObjectSupplier.get();
 
@@ -291,10 +289,8 @@ public class EasyExcelCellReader<R> extends CellReader<R> {
                 }
             }).sheet(sheetName).doRead();
 
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][EasyExcelCellReader.read] Sheet读取完成: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[EasyExcelCellReader] Sheet读取完成: rId={}, sheetName={}",
+                    sheetRid, sheetName);
         } catch (Exception e) {
             log.error("EasyExcel读取Excel文件异常", e);
         } finally {

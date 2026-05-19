@@ -119,18 +119,14 @@ public class HutoolCellReader<R> extends CellReader<R> {
         try {
             /*模版一致性检查:  获取声明的所有CELL, 接下来如果读取到cell就会移除, 当所有cell命中时说明单元格是一致的.*/
             Set<String> templateConsistencyCheckCells = new HashSet<>();
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolCellReader.read] 开始读取sheet: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[HutoolCellReader] 开始读取sheet: rId={}, sheetName={}",
+                    sheetRid, sheetName);
             Excel07SaxReader excel07SaxReader = initSaxReader(templateConsistencyCheckCells);
             /*第一个参数 文件流  第二个参数 sheetRid 直接定位到指定sheet*/
             excel07SaxReader.read(this.getParent().sourceFile.getInputStream(), getParent().rid2SheetNameBiMap.get(sheetRid));
 
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolCellReader.read] Sheet读取完成: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[HutoolCellReader] Sheet读取完成: rId={}, sheetName={}",
+                    sheetRid, sheetName);
 
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常", e);

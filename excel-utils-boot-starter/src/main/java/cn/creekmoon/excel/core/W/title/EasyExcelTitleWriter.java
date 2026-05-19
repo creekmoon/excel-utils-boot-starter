@@ -215,6 +215,10 @@ public class EasyExcelTitleWriter<R> extends TitleWriter<R> {
         }
 
         List<List<R>> batches = partition(dataToWrite, BATCH_SIZE);
+        if (batches.isEmpty()) {
+            // 空数据时仍触发 sheet 创建（确保仅写表头的 sheet 能被 stopWrite 重排序）
+            getExcelWriter().write(Collections.emptyList(), writeSheet);
+        }
         for (List<R> batch : batches) {
             // 记录行号映射，供条件样式 handler 使用
             int batchStartRow = currentRow;
@@ -246,9 +250,7 @@ public class EasyExcelTitleWriter<R> extends TitleWriter<R> {
             try {
                 data = title.valueFunction.apply(dataObject);
             } catch (Exception e) {
-                if (parent.debugger) {
-                    log.info("[Excel构建]生成Excel获取数据值时发生错误!已经忽略错误并设置为NULL值!", e);
-                }
+                log.debug("[EasyExcelTitleWriter] 生成Excel获取数据值时发生错误!已经忽略错误并设置为NULL值!", e);
             }
             row.add(data);
         }
@@ -295,36 +297,49 @@ public class EasyExcelTitleWriter<R> extends TitleWriter<R> {
     private class ConditionStyleCellWriteHandler implements CellWriteHandler {
 
         @Override
+        public int order() {
+            return 60000;
+        }
+
+        @Override
         public void afterCellDispose(CellWriteHandlerContext context) {
             if (Boolean.TRUE.equals(context.getHead())) {
                 return;
             }
 
-            // 只处理当前 sheet
             String currentSheetName = context.getWriteSheetHolder().getSheetName();
-            if (!currentSheetName.equals(EasyExcelTitleWriter.this.sheetName)) {
+
+            /* 多 sheet 共享同一个 ExcelWriter，需根据 sheetName 定位到对应的 writer 实例 */
+            EasyExcelTitleWriter<?> targetWriter = null;
+            for (Writer w : parent.sheetIndex2SheetWriter.values()) {
+                if (w instanceof EasyExcelTitleWriter<?> etw && currentSheetName.equals(etw.sheetName)) {
+                    targetWriter = etw;
+                    break;
+                }
+            }
+            if (targetWriter == null) {
                 return;
             }
 
             int rowIndex = context.getCell().getRowIndex();
             int colIndex = context.getCell().getColumnIndex();
 
-            if (colIndex < 0 || colIndex >= titles.size()) {
+            if (colIndex < 0 || colIndex >= targetWriter.titles.size()) {
                 return;
             }
 
-            R data = rowIndex2Data.get(rowIndex);
+            Object data = targetWriter.rowIndex2Data.get(rowIndex);
             if (data == null) {
                 return;
             }
 
-            Title title = titles.get(colIndex);
-            for (ConditionCellStyle<R> conditionStyle : title.conditionCellStyleList) {
+            Title title = targetWriter.titles.get(colIndex);
+            for (ConditionCellStyle conditionStyle : title.conditionCellStyleList) {
                 if (conditionStyle == null || conditionStyle.getCondition() == null) {
                     continue;
                 }
                 if (conditionStyle.getCondition().test(data)) {
-                    CellStyle poiStyle = getRunningTimeCellStyle(conditionStyle.getDefaultCellStyle());
+                    CellStyle poiStyle = targetWriter.getRunningTimeCellStyle(conditionStyle.getDefaultCellStyle());
                     context.getCell().setCellStyle(poiStyle);
                 }
             }

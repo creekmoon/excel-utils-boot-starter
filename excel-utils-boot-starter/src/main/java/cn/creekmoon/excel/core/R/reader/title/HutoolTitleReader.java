@@ -191,25 +191,19 @@ public class HutoolTitleReader<R> extends TitleReader<R> {
         ExcelUtilsConfig.importParallelSemaphore.acquire();
         try {
             //新版读取 使用SAX读取模式
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolTitleReader.read] 开始读取sheet: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[HutoolTitleReader] 开始读取sheet: rId={}, sheetName={}",
+                    sheetRid, sheetName);
 
             ExcelSaxReader saxReader = initSaxReader(dataConsumer);
             /*第一个参数 文件流  第二个参数 sheetRid 直接定位到指定sheet*/
             saxReader.read(this.getParent().sourceFile.getInputStream(), getParent().rid2SheetNameBiMap.get(sheetRid));
 
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolTitleReader.read] Sheet读取完成: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[HutoolTitleReader] Sheet读取完成: rId={}, sheetName={}",
+                    sheetRid, sheetName);
         } catch (StopReadException e) {
             // StopReadException 是正常的提前终止，不算异常
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][HutoolTitleReader.read] 读取提前终止（fail-fast或阈值停止）: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[HutoolTitleReader] 读取提前终止（fail-fast或阈值停止）: rId={}, sheetName={}",
+                    sheetRid, sheetName);
         } catch (Exception e) {
             log.error("SaxReader读取Excel文件异常, sheetRid={}, sheetName={}", sheetRid, sheetName, e);
             // 记录到 report

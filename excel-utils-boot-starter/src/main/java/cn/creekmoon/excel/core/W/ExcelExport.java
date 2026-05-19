@@ -27,11 +27,6 @@ import java.util.function.Consumer;
  */
 @Slf4j
 public class ExcelExport {
-    /**
-     * 打印调试内容
-     */
-    public boolean debugger = false;
-
     /*唯一识别名称*/
     @Getter
     protected String taskId = UUID.randomUUID().toString();
@@ -113,12 +108,6 @@ public class ExcelExport {
         EasyExcelTitleWriter<T> newTitleWriter = new EasyExcelTitleWriter<T>(this, sheetIndex2SheetWriter.size(),sheetName);
         sheetIndex2SheetWriter.put(newTitleWriter.getSheetIndex(), newTitleWriter);
         return newTitleWriter;
-    }
-
-
-    public ExcelExport debug() {
-        this.debugger = true;
-        return this;
     }
 
 

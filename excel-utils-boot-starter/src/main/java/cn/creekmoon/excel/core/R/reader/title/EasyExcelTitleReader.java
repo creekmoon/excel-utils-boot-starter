@@ -176,16 +176,14 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
 
         ExcelUtilsConfig.importParallelSemaphore.acquire();
         try {
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][EasyExcelTitleReader.read] 开始读取sheet: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[EasyExcelTitleReader] 开始读取sheet: rId={}, sheetName={}",
+                    sheetRid, sheetName);
 
             EasyExcel.read(this.getParent().sourceFile.getInputStream(), new AnalysisEventListener<Map<Integer, String>>() {
                 @Override
                 public void invokeHeadMap(Map<Integer, String> headMap, AnalysisContext context) {
                     int rowIndex = context.readRowHolder().getRowIndex();
-                    log.info("[DEBUG] invokeHeadMap rowIndex={}, headMap={}", rowIndex, headMap);
+                    log.debug("[EasyExcelTitleReader] invokeHeadMap rowIndex={}, headMap={}", rowIndex, headMap);
                     if (rowIndex == titleRowIndex) {
                         for (Map.Entry<Integer, String> entry : headMap.entrySet()) {
                             colIndex2Title.put(entry.getKey(), StringConverter.parse(entry.getValue()));
@@ -213,21 +211,21 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
                 @Override
                 public void invoke(Map<Integer, String> data, AnalysisContext context) {
                     int rowIndex = context.readRowHolder().getRowIndex();
-                    log.info("[DEBUG] invoke rowIndex={}, dataSize={}, titleRowIndex={}, firstRowIndex={}, latestRowIndex={}",
+                    log.debug("[EasyExcelTitleReader] invoke rowIndex={}, dataSize={}, titleRowIndex={}, firstRowIndex={}, latestRowIndex={}",
                             rowIndex, data.size(), titleRowIndex, firstRowIndex, latestRowIndex);
 
                     /*只读取指定范围的数据 */
                     if (rowIndex < firstRowIndex || rowIndex > latestRowIndex) {
-                        log.info("[DEBUG] row {} out of range [{}, {}]", rowIndex, firstRowIndex, latestRowIndex);
+                        log.debug("[EasyExcelTitleReader] row {} out of range [{}, {}]", rowIndex, firstRowIndex, latestRowIndex);
                         return;
                     }
 
                     /*没有添加 convert直接跳过 */
                     if (title2converts.isEmpty() && title2consumers.isEmpty()) {
-                        log.info("[DEBUG] no converts registered");
+                        log.debug("[EasyExcelTitleReader] no converts registered");
                         return;
                     }
-                    log.info("[DEBUG] processing data row {}, colIndex2Title size={}", rowIndex, colIndex2Title.size());
+                    log.debug("[EasyExcelTitleReader] processing data row {}, colIndex2Title size={}", rowIndex, colIndex2Title.size());
 
                     /*Excel解析原生的数据. 目前只用于内部数据转换*/
                     HashMap<String, String> hashDataMap = new LinkedHashMap<>();
@@ -300,15 +298,11 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
                 }
             }).sheet(sheetName).doRead();
 
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][EasyExcelTitleReader.read] Sheet读取完成: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[EasyExcelTitleReader] Sheet读取完成: rId={}, sheetName={}",
+                    sheetRid, sheetName);
         } catch (EasyExcelStopReadException e) {
-            if (getParent().debugger) {
-                log.info("[DEBUGGER][EasyExcelTitleReader.read] 读取提前终止（fail-fast或阈值停止）: rId={}, sheetName={}",
-                        sheetRid, sheetName);
-            }
+            log.debug("[EasyExcelTitleReader] 读取提前终止（fail-fast或阈值停止）: rId={}, sheetName={}",
+                    sheetRid, sheetName);
         } catch (Exception e) {
             log.error("EasyExcel读取Excel文件异常, sheetRid={}, sheetName={}, exClass={}, exMsg={}",
                     sheetRid, sheetName, e.getClass().getName(), e.getMessage(), e);

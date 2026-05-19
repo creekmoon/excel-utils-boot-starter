@@ -262,10 +262,7 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
             try {
                 data = title.valueFunction.apply(dataObject);
             } catch (Exception exception) {
-                // nothing to do
-                if (parent.debugger) {
-                    log.info("[Excel构建]生成Excel获取数据值时发生错误!已经忽略错误并设置为NULL值!", exception);
-                }
+                log.debug("[HutoolTitleWriter] 生成Excel获取数据值时发生错误!已经忽略错误并设置为NULL值!", exception);
             }
             row.add(data);
         }
@@ -294,17 +291,13 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
                 .map(x -> StrUtil.count(x.titleName, x.PARENT_TITLE_SEPARATOR) + 1)
                 .max(Comparator.naturalOrder())
                 .orElse(1);
-        if (parent.debugger) {
-            System.out.println("[Excel构建] 表头深度获取成功! 表头最大深度为" + MAX_TITLE_DEPTH);
-        }
+        log.debug("[HutoolTitleWriter] 表头深度获取成功! 表头最大深度为{}", MAX_TITLE_DEPTH);
 
         /*🔥 核心推断逻辑：如果用户没有明确指定 firstRowIndex，则根据表头深度自动推断*/
         if (firstRowIndex == null) {
             firstRowIndex = titleRowIndex + MAX_TITLE_DEPTH;
-            if (parent.debugger) {
-                System.out.println("[Excel构建] 自动推断数据起始行: titleRowIndex=" + titleRowIndex
-                        + ", MAX_TITLE_DEPTH=" + MAX_TITLE_DEPTH + ", firstRowIndex=" + firstRowIndex);
-            }
+            log.debug("[HutoolTitleWriter] 自动推断数据起始行: titleRowIndex={}, MAX_TITLE_DEPTH={}, firstRowIndex={}",
+                    titleRowIndex, MAX_TITLE_DEPTH, firstRowIndex);
         }
 
         /*多级表头初始化*/
@@ -347,20 +340,14 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
                         int startColIndex = list.stream().map(x -> x.startColIndex).min(Comparator.naturalOrder()).orElse(1);
                         int endColIndex = list.stream().map(x -> x.endColIndex).max(Comparator.naturalOrder()).orElse(1);
                         if (startColIndex == endColIndex) {
-                            if (parent.debugger) {
-                                System.out.println("[Excel构建] 插入表头[" + list.get(0).titleName + "]");
-                            }
+                            log.debug("[HutoolTitleWriter] 插入表头[{}]", list.get(0).titleName);
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellValue(list.get(0).titleName);
                             this.getBigExcelWriter().getOrCreateCell(startColIndex, rowsIndex).setCellStyle(this.getBigExcelWriter().getHeadCellStyle());
                             return;
                         }
-                        if (parent.debugger) {
-                            System.out.println("[Excel构建] 插入表头并横向合并[" + list.get(0).titleName + "]预计合并格数[" + (endColIndex - startColIndex) + "]");
-                        }
+                        log.debug("[HutoolTitleWriter] 插入表头并横向合并[{}] 预计合并格数[{}]", list.get(0).titleName, endColIndex - startColIndex);
                         this.getBigExcelWriter().merge(rowsIndex, rowsIndex, startColIndex, endColIndex, list.get(0).titleName, true);
-                        if (parent.debugger) {
-                            System.out.println("[Excel构建] 横向合并表头[" + list.get(0).titleName + "]完毕");
-                        }
+                        log.debug("[HutoolTitleWriter] 横向合并表头[{}]完毕", list.get(0).titleName);
                     });
             /* hutool excel 写入下移一行*/
             this.getBigExcelWriter().setCurrentRow(this.getBigExcelWriter().getCurrentRow() + 1);
@@ -375,9 +362,7 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
                     /*发现重复的单元格,不会马上合并 因为可能有更多重复的*/
                     sameCount++;
                 } else if (sameCount != 0) {
-                    if (parent.debugger) {
-                        System.out.println("[Excel构建] 表头纵向合并" + title.titleName + "  预计合并格数" + sameCount);
-                    }
+                    log.debug("[HutoolTitleWriter] 表头纵向合并{}  预计合并格数{}", title.titleName, sameCount);
                     /*合并单元格*/
                     this.getBigExcelWriter().merge(getRowsIndexByDepth(depth), getRowsIndexByDepth(depth) + sameCount, colIndex, colIndex, title.titleName, true);
                     sameCount = 0;
@@ -496,9 +481,7 @@ public class HutoolTitleWriter<R> extends TitleWriter<R> {
         List<R> dataToWrite = targetDataList;
         if (maxRows < targetDataList.size() && latestRowIndex != Integer.MAX_VALUE) {
             dataToWrite = targetDataList.subList(0, Math.max(0, maxRows));
-            if (parent.debugger) {
-                log.info("[Excel构建] 写入范围受限，数据被截断。原始数据行数: {}, 实际写入行数: {}", targetDataList.size(), dataToWrite.size());
-            }
+            log.debug("[HutoolTitleWriter] 写入范围受限，数据被截断。原始数据行数: {}, 实际写入行数: {}", targetDataList.size(), dataToWrite.size());
         }
 
         /* 分批写,数量上限等于滑动窗口值*/

@@ -131,7 +131,7 @@ public class ExcelFileUtils {
             if (!Files.deleteIfExists(Paths.get(filePath))) {
                 log.warn("清理临时文件失败! 路径:" + filePath);
             }
-            log.debug("清理临时文件成功!路径:" + filePath);
+            log.debug("[ExcelFileUtils] 清理临时文件成功! 路径:{}", filePath);
         } catch (Exception e) {
             log.warn("清理临时文件失败! 路径:" + filePath);
         }
