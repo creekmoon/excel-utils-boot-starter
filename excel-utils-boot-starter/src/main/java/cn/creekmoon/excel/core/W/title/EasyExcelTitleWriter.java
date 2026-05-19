@@ -293,10 +293,6 @@ public class EasyExcelTitleWriter<R> extends TitleWriter<R> {
      * 条件样式 CellWriteHandler：在单元格写入完成后，根据数据和标题配置回写 POI CellStyle。
      */
     private class ConditionStyleCellWriteHandler implements CellWriteHandler {
-        @Override
-        public int getOrder() {
-            return 60000;
-        }
 
         @Override
         public void afterCellDispose(CellWriteHandlerContext context) {
