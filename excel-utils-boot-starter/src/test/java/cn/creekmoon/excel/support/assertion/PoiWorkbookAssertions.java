@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 基于 Apache POI 打开导出/回写文件并做结构断言（与 Hutool 写入解耦）。 */
+/** 基于 Apache POI 打开导出/回写文件并做结构断言（与底层引擎 EasyExcel 解耦）。 */
 public final class PoiWorkbookAssertions {
 
     private PoiWorkbookAssertions() {

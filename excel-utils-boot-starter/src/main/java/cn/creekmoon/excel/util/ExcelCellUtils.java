@@ -1,13 +1,16 @@
 package cn.creekmoon.excel.util;
 
-import cn.hutool.poi.excel.ExcelUtil;
-import cn.hutool.poi.excel.ExcelWriter;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 public class ExcelCellUtils {
 
     /**
-     * excel列号转数字
-     * A-->1   AA-->27
+     * excel列号转数字(0-based)
+     * A-->0   AA-->26
      *
      * @param column 列号字母 例如A,B,C
      * @return
@@ -23,8 +26,8 @@ public class ExcelCellUtils {
 
 
     /**
-     * excel单元格获取列号数字
-     * 例如输入 B6  返回2    输入AA23 返回27
+     * excel单元格获取列号数字(0-based)
+     * 例如输入 B6  返回1    输入AA23 返回26
      *
      * @param
      * @return
@@ -35,8 +38,8 @@ public class ExcelCellUtils {
     }
 
     /**
-     * excel单元格获取行号数字
-     * 例如输入 B6  返回6    输入AA23 返回23
+     * excel单元格获取行号数字(0-based)
+     * 例如输入 B6  返回5    输入AA23 返回22
      *
      * @param
      * @return
@@ -47,8 +50,8 @@ public class ExcelCellUtils {
     }
 
     /**
-     * excel列号和行号转为CellReference
-     * 例如输入 6,2 返回B6
+     * excel行号(0-based)和列号(0-based)转为1-based单元格引用
+     * 例如输入 0,0 返回A1
      *
      * @param
      * @return
@@ -75,9 +78,13 @@ public class ExcelCellUtils {
         System.out.println("excelCellToRowNumber(\"B28\") = " + excelCellToRowIndex("B28"));
         System.out.println("excelIndexToCell(2,1) = " + excelIndexToCell(27, 26));
 
-        ExcelWriter writer = ExcelUtil.getWriter("C:\\Users\\JY\\Desktop\\草稿.xlsx");
-        writer.writeCellValue(0, 0, "A15555555555555555");
-        writer.flush();
-        writer.close();
+        // POI 原生写文件示例(替代 Hutool ExcelWriter)
+        try (Workbook workbook = new XSSFWorkbook();
+             FileOutputStream out = new FileOutputStream("C:\\Users\\JY\\Desktop\\草稿.xlsx")) {
+            workbook.createSheet().createRow(0).createCell(0).setCellValue("A15555555555555555");
+            workbook.write(out);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

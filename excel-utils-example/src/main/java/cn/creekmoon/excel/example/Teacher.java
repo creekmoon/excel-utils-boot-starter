@@ -1,9 +1,9 @@
 package cn.creekmoon.excel.example;
 
-import cn.hutool.core.util.RandomUtil;
 import lombok.*;
 
 import java.util.ArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 
 
 /**
@@ -23,11 +23,23 @@ public class Teacher {
     public static  Teacher createNewTeacher() {
         Teacher teacher = new Teacher();
         //随机年龄
-        teacher.setWorkYear(RandomUtil.randomInt(1, 10));
-        teacher.setTeacherName(RandomUtil.randomString(5));
+        teacher.setWorkYear(ThreadLocalRandom.current().nextInt(1, 10));
+        teacher.setTeacherName(randomString(5));
         return teacher;
     }
 
+
+
+    /**
+     * 生成指定长度的随机小写字母字符串(替代 Hutool RandomUtil.randomString)
+     */
+    private static String randomString(int length) {
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append((char) ('a' + ThreadLocalRandom.current().nextInt(26)));
+        }
+        return sb.toString();
+    }
 
 
     public static  ArrayList<Teacher> createTeacherList(int size) {

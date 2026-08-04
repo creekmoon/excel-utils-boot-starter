@@ -7,7 +7,6 @@ import cn.creekmoon.excel.core.R.reader.title.EasyExcelTitleReader;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
 import cn.creekmoon.excel.util.ExcelConstants;
 import cn.creekmoon.excel.util.ExcelFileUtils;
-import cn.hutool.core.map.BiMap;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.support.ExcelTypeEnum;
 import jakarta.servlet.http.HttpServletResponse;
@@ -43,10 +42,10 @@ public class ExcelImport {
     public ArrayList<Reader> allReaders = new ArrayList<>();
 
     /**
-     * Sheet的rId和SheetName的双向映射
+     * Sheet的rId和SheetName的映射(有序)
      * 该映射基于Excel文件的workbook.xml解析，保证有序且稳定
      */
-    public BiMap<String, String> rid2SheetNameBiMap;
+    public Map<String, String> rid2SheetNameBiMap;
 
     /*唯一识别名称 会同步生成一份文件到临时目录*/
     public String taskId = java.util.UUID.randomUUID().toString();
@@ -294,13 +293,13 @@ public class ExcelImport {
     }
 
     /**
-     * 解析Excel文件的workbook.xml，构建rId ↔ SheetName的双向映射
+     * 解析Excel文件的workbook.xml，构建rId → SheetName的映射
      * 使用POI Package API进行轻量级解析，不加载完整workbook
      *
-     * @return rId ↔ SheetName 的双向映射表（有序）
+     * @return rId → SheetName 的映射表（有序）
      */
-    private BiMap<String, String> parseSheetMappings() {
-        BiMap<String, String> result = new BiMap<>(new LinkedHashMap<>());
+    private Map<String, String> parseSheetMappings() {
+        Map<String, String> result = new LinkedHashMap<>();
 
         try {
             log.debug("[ExcelImport] 开始解析workbook.xml");

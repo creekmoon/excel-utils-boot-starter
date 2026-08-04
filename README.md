@@ -3,7 +3,7 @@
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/cn.creekmoon/excel-utils-boot-starter/badge.svg)](https://mvnrepository.com/artifact/cn.creekmoon/excel-utils-boot-starter)
 [![License](http://img.shields.io/:license-apache-brightgreen.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 
-一个基于 Hutool 的优雅易用的 Excel 导入导出工具，专为 Spring Boot 应用设计。
+一个基于 EasyExcel 的优雅易用的 Excel 导入导出工具，专为 Spring Boot 应用设计。
 
 ## 设计理念
 

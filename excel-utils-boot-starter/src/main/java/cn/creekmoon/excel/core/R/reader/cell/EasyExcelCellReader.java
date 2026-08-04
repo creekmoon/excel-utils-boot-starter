@@ -22,8 +22,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
- * 基于 EasyExcel 4.0.3 的 SAX 流式单元格读取器
- * 替换 HutoolCellReader，保持完全一致的外部行为
+ * 基于 EasyExcel 4.0.3 的 SAX 流式单元格读取器（唯一底层实现）
+ * 保持与门面层完全一致的外部行为
  */
 @Slf4j
 public class EasyExcelCellReader<R> extends CellReader<R> {

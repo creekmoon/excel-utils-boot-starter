@@ -52,7 +52,14 @@ public class ExcelFileUtils {
     public static String getCustomAbsoluteFilePath(String fileName) {
 //这里凌晨跨天的话会有问题 不过我不想管了... hhh
 //        return getApplicationParentFilePath() + File.separator + "temp_files" + File.separator + DateUtil.format(new Date(), "yyyy-MM-dd") + File.separator + fileName;
-        return getApplicationParentFilePath() + File.separator + "temp_files" + File.separator + fileName;
+        String filePath = getApplicationParentFilePath() + File.separator + "temp_files" + File.separator + fileName;
+        /* 确保临时目录存在(EasyExcel 写入不会自动创建父目录,替代原 Hutool FileUtil.getOutputStream 的隐式创建) */
+        try {
+            Files.createDirectories(Paths.get(filePath).getParent());
+        } catch (IOException e) {
+            log.warn("[ExcelFileUtils] 创建临时文件目录失败! 路径:{}", filePath, e);
+        }
+        return filePath;
     }
 
 

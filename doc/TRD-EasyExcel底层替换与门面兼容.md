@@ -389,6 +389,21 @@ graph TB
 
 - **当前版本（MVP）**：底层完成 Hutool Excel → EasyExcel 替换，`mvn test -pl excel-utils-boot-starter` 全绿，README 更新引擎描述
 - **后续迭代方向**：
-  1. 评估是否彻底移除 `hutool-all` 依赖（非 Excel 工具类替换为 JDK 或 Commons）
+  1. ~~评估是否彻底移除 `hutool-all` 依赖（非 Excel 工具类替换为 JDK 或 Commons）~~ **已完成（2026-08-05）**
   2. 新增注解驱动实体映射作为第二套用法（与现有门面并列）
   3. 性能基准测试：大文件（10w 行）导入导出耗时与内存曲线量化
+
+## 9）迭代收尾记录（2026-08-05）
+
+彻底移除 hutool 相关内容的收尾清单，底层唯一实现为 EasyExcel：
+
+- **删除旧引擎实现类**：`HutoolTitleWriter`、`HutoolTitleReader`、`HutoolCellReader` 已从源码目录删除
+- **门面与工具类去 Hutool**：
+  - `ExcelImport.rid2SheetNameBiMap` / `ExcelExport.sheetIndex2SheetWriter`：Hutool `BiMap` → JDK `Map`（全库仅用正向映射，无行为差异）
+  - `ExcelStyleUtils`：Hutool `StyleUtil.createDefaultCellStyle` → POI 原生实现（居中 + 细黑边框，行为一致）
+  - `ExcelCellUtils`：`main()` 草稿中的 Hutool `ExcelWriter` → POI 原生示例
+  - `DateConverter`：Hutool `DateUtil.parse` / `NumberUtil.isNumber` → JDK `SimpleDateFormat` / `BigDecimal`（格式兼容：标准日期、纯数字 8/14/17 位、13 位时间戳、`-`/`/`/`.` 分隔符等价）
+  - `LocalDateTimeConverter`：Hutool `LocalDateTimeUtil.of` → JDK `LocalDateTime.ofInstant`
+  - example 模块 `RandomUtil` → JDK `ThreadLocalRandom`
+- **依赖清理**：parent `dependencyManagement` 与 starter `pom.xml` 中的 `hutool-all` 已移除；编译产物中不再包含 hutool 任何模块
+- **验证**：`mvn test -pl excel-utils-boot-starter` 全绿；全仓 grep 无 `cn.hutool` 残留

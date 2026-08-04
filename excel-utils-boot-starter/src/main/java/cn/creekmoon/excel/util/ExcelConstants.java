@@ -8,8 +8,9 @@ public class ExcelConstants {
     public static final String RESULT_TITLE = "导入结果";
     public static final String IMPORT_SUCCESS_MSG = "导入成功!";
     public static final String CONVERT_SUCCESS_MSG = "验证通过!";
-    public static final String CONVERT_FAIL_MSG = "字段[{}]解析失败！";
+    /* 注意:占位符使用 %s(String.format 风格),替代 Hutool StrFormatter 的 {} 语法 */
+    public static final String CONVERT_FAIL_MSG = "字段[%s]解析失败！";
 
-    public static final String FIELD_LACK_MSG = "字段[{}]为必填项! ";
+    public static final String FIELD_LACK_MSG = "字段[%s]为必填项! ";
 
 }

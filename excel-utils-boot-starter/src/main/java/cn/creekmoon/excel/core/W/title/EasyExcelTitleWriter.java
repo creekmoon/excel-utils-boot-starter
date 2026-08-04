@@ -21,7 +21,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 基于 EasyExcel 4.x 的流式写入器，替换 HutoolTitleWriter。
+ * 基于 EasyExcel 4.x 的流式写入器（唯一底层实现）。
  * 支持多级表头、条件样式、reset 分段写、多 sheet 共享同一 ExcelWriter。
  */
 @Slf4j

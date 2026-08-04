@@ -5,7 +5,6 @@ import cn.creekmoon.excel.core.W.title.EasyExcelTitleWriter;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
 import cn.creekmoon.excel.util.ExcelFileUtils;
 import cn.creekmoon.excel.util.exception.ExConsumer;
-import cn.hutool.core.map.BiMap;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -44,7 +44,7 @@ public class ExcelExport {
     /*
      * sheet页和导出对象的映射关系
      * */
-    public BiMap<Integer, Writer> sheetIndex2SheetWriter = new BiMap<>(new HashMap<>());
+    public Map<Integer, Writer> sheetIndex2SheetWriter = new HashMap<>();
 
 
     private ExcelExport() {
