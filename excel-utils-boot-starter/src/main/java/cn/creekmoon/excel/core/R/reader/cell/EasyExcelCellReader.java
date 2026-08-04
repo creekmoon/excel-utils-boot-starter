@@ -10,6 +10,7 @@ import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.enums.ReadDefaultReturnEnum;
 import com.alibaba.excel.event.AnalysisEventListener;
 import lombok.extern.slf4j.Slf4j;
 
@@ -287,7 +288,11 @@ public class EasyExcelCellReader<R> extends CellReader<R> {
                         }
                     }
                 }
-            }).sheet(sheetName).doRead();
+            }).readDefaultReturn(ReadDefaultReturnEnum.ACTUAL_DATA)
+                    /* Map 模式返回真实 Java 类型（日期→Date），避免默认 STRING 模式把日期
+                     * 转成分钟精度字符串导致秒级丢失；Date 由 StringConverter 统一格式化 */
+                    .sheet(sheetName)
+                    .doRead();
 
             log.debug("[EasyExcelCellReader] Sheet读取完成: rId={}, sheetName={}",
                     sheetRid, sheetName);

@@ -14,6 +14,7 @@ import cn.creekmoon.excel.util.exception.ExFunction;
 import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.enums.ReadDefaultReturnEnum;
 import com.alibaba.excel.event.AnalysisEventListener;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -296,7 +297,14 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
                 public void doAfterAllAnalysed(AnalysisContext context) {
                     /*sheet读取结束时*/
                 }
-            }).sheet(sheetName).doRead();
+            }).readDefaultReturn(ReadDefaultReturnEnum.ACTUAL_DATA)
+                    /* Map 模式返回真实 Java 类型（日期→Date），避免默认 STRING 模式把日期
+                     * 转成分钟精度字符串导致秒级丢失；Date 由 StringConverter 统一格式化 */
+                    .sheet(sheetName)
+                    /* 表头行数 = titleRowIndex + 1：invokeHeadMap 只对 EasyExcel 认定的表头行触发，
+                     * 非 0 表头（多级表头/同 sheet 多表格）必须扩大表头行范围 */
+                    .headRowNumber(titleRowIndex + 1)
+                    .doRead();
 
             log.debug("[EasyExcelTitleReader] Sheet读取完成: rId={}, sheetName={}",
                     sheetRid, sheetName);

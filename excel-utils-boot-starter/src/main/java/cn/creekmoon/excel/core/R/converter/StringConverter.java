@@ -1,5 +1,7 @@
 package cn.creekmoon.excel.core.R.converter;
 
+import cn.creekmoon.excel.util.ExcelConstants;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -8,8 +10,6 @@ import java.util.Date;
  * Excel初次解析时，就会执行这个解析器。将所有数据都转成String
  */
 public class StringConverter {
-
-    private static final String DATE_FORMAT_PATTERN = "yyyy-MM-dd HH:mm:ss";
 
     /**
      * 全局默认数据转换器 将所有的数值都转换成String
@@ -26,7 +26,7 @@ public class StringConverter {
             return str == null ? "" : str.trim();
         }
         if (value instanceof Date) {
-            return new SimpleDateFormat(DATE_FORMAT_PATTERN).format((Date) value);
+            return new SimpleDateFormat(ExcelConstants.DATE_FORMAT_PATTERN).format((Date) value);
         }
         return String.valueOf(value);
     }
