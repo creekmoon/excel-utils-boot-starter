@@ -43,7 +43,7 @@ class DateRoundtripTest {
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
         List<Student> imported = reader.getAll();
-        ImportReport<Student> report = reader.getReport();
+        ImportReport report = reader.getReport();
         ImportReportAssertions.logReportSummary(report);
         ImportReportAssertions.assertNoErrors(report);
 

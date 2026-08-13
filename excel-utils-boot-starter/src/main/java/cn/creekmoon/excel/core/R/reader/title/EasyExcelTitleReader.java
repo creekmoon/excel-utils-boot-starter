@@ -4,14 +4,13 @@ import cn.creekmoon.excel.core.ExcelUtilsConfig;
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.converter.StringConverter;
 import cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum;
-import cn.creekmoon.excel.core.R.report.ImportOptions;
 import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.util.ExcelConstants;
-import cn.creekmoon.excel.util.exception.CheckedExcelException;
 import cn.creekmoon.excel.util.exception.ExBiConsumer;
 import cn.creekmoon.excel.util.exception.ExConsumer;
 import cn.creekmoon.excel.util.exception.ExFunction;
 import cn.creekmoon.excel.util.exception.GlobalExceptionMsgManager;
+import cn.creekmoon.excel.util.exception.RowConvertException;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.context.AnalysisContext;
 import com.alibaba.excel.enums.ReadDefaultReturnEnum;
@@ -33,9 +32,6 @@ import java.util.function.Supplier;
 
 @Slf4j
 public class EasyExcelTitleReader<R> extends TitleReader<R> {
-
-    /*标志位, 模板一致性检查已经失败 */
-    public boolean TEMPLATE_CONSISTENCY_CHECK_FAILED = false;
 
     public EasyExcelTitleReader(ExcelImport parent, String sheetRid, String sheetName, Supplier newObjectSupplier) {
         super(parent);
@@ -131,49 +127,30 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
     }
 
     @Override
-    public ImportReport<R> readWithReport(ImportOptions options) {
-        super.options = options != null ? options : ImportOptions.defaults();
-        initializeReport();
-
+    public ImportReport readWithReport() {
         read((ExConsumer<R>) data -> {
-            if (super.options.isCollectSuccessData()) {
-                if (super.report.getData() == null) {
-                    super.report.setData(new ArrayList<>());
-                }
-                Integer maxSuccessData = super.options.getMaxSuccessData();
-                if (maxSuccessData == null || super.report.getData().size() < maxSuccessData) {
-                    super.report.getData().add(data);
-                }
-            }
         });
-
         return super.report;
     }
 
     /**
      * 初始化导入报告
+     * 每次读取前重置, 写入 sheet 元数据与配置的行范围
      */
     private void initializeReport() {
-        super.report = new ImportReport<>();
+        super.report = new ImportReport();
         super.report.setTaskId(getParent().taskId);
         super.report.setSheetRid(sheetRid);
         super.report.setSheetName(sheetName);
         super.report.setTitleRowIndex(titleRowIndex);
         super.report.setFirstRowIndex(firstRowIndex);
         super.report.setLatestRowIndex(latestRowIndex);
-
-        if (super.options != null && super.options.isCollectRowErrors()) {
-            super.report.setRowErrors(new ArrayList<>());
-        }
     }
 
     @SneakyThrows
     @Override
     public TitleReader<R> read(ExBiConsumer<Integer, R> dataConsumer) {
-        if (super.report == null) {
-            super.options = ImportOptions.defaults();
-            initializeReport();
-        }
+        initializeReport();
 
         ExcelUtilsConfig.importParallelSemaphore.acquire();
         try {
@@ -194,14 +171,10 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
                             Set<String> targetTitles = title2converts.keySet();
                             Set<String> sourceTitles = new HashSet<>(colIndex2Title.values());
 
+                            /* 模板不匹配属于文件级失败, 继续扫描只会逐行重复同一个原因 */
                             if (!templateConsistencyCheck(targetTitles, sourceTitles)) {
                                 addGlobalError(ImportGlobalErrorEnum.TEMPLATE_MISMATCH);
-
-                                if (options != null && options.isFailFastOnTemplateMismatch()) {
-                                    throw new EasyExcelStopReadException();
-                                }
-
-                                TEMPLATE_CONSISTENCY_CHECK_FAILED = true;
+                                throw new EasyExcelStopReadException();
                             }
 
                             ENABLE_TEMPLATE_CONSISTENCY_REVIEW = false;
@@ -264,7 +237,6 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
 
                     } catch (Exception e) {
                         EXISTS_READ_FAIL.set(true);
-                        String exceptionMsg = GlobalExceptionMsgManager.getExceptionMsg(e);
 
                         if (!totalRowsCounted) {
                             if (report.getProcessedFirstRowIndex() == null) {
@@ -273,17 +245,18 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
                             report.setProcessedLastRowIndex(rowIndex);
                             report.setTotalRows(report.getTotalRows() + 1);
                         }
-
                         report.setErrorRows(report.getErrorRows() + 1);
 
-                        if (options != null && options.isCollectRowErrors() && !isTemplateMismatchException(e)) {
-                            report.getRowErrors().add(new ImportReport.RowError(rowIndex, exceptionMsg));
-                        }
-
-                        if (options != null && options.getMaxErrorRows() != null
-                                && report.getErrorRows() >= options.getMaxErrorRows()) {
-                            addGlobalError(ImportGlobalErrorEnum.ERROR_LIMIT_REACHED);
-                            throw new EasyExcelStopReadException();
+                        /* 转换阶段一行可能多列同时失败, 逐列记明细; 后置处理与业务消费只会有一条 */
+                        if (e instanceof RowConvertException rowConvertException) {
+                            for (RowConvertException.FieldFailure fieldFailure : rowConvertException.getFieldFailures()) {
+                                report.getRowErrors().add(new ImportReport.RowError(rowIndex,
+                                        GlobalExceptionMsgManager.decorateMsg(fieldFailure.message()),
+                                        fieldFailure.title()));
+                            }
+                        } else {
+                            report.getRowErrors().add(new ImportReport.RowError(rowIndex,
+                                    GlobalExceptionMsgManager.getExceptionMsg(e)));
                         }
 
                         if (!GlobalExceptionMsgManager.isCustomException(e)) {
@@ -364,16 +337,12 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
 
     /**
      * 行转换
+     * 逐列执行转换器, 收集本行全部失败字段后一次性抛出, 使填表人一轮就能改完整行
      *
      * @param row 实际上是Map<String, String>对象
-     * @throws Exception
+     * @throws RowConvertException 本行存在一个或多个字段转换失败
      */
     private R rowConvert(Map<String, String> row) throws Exception {
-        /*模板一致性检查已前置到标题行，这里检查标记即可*/
-        if (TEMPLATE_CONSISTENCY_CHECK_FAILED) {
-            throw new CheckedExcelException(ImportGlobalErrorEnum.TEMPLATE_MISMATCH.getMessage());
-        }
-
         /*过滤空白行*/
         if (super.ENABLE_BLANK_ROW_FILTER
                 && row.values().stream().allMatch(x -> x == null || x.isEmpty())
@@ -385,6 +354,7 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
         R convertObject = (R) super.newObjectSupplier.get();
         /*最大转换次数*/
         int maxConvertCount = super.title2consumers.keySet().size();
+        List<RowConvertException.FieldFailure> fieldFailures = new ArrayList<>();
         /*执行convert*/
         for (Map.Entry<String, String> entry : row.entrySet()) {
             /*如果包含不支持的标题,  或者已经超过最大次数则不再进行读取*/
@@ -393,9 +363,11 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
             }
             String value = Optional.ofNullable(entry.getValue()).orElse("");
             /*检查必填项/检查可填项*/
-            if (value == null || value.trim().isEmpty()) {
+            if (value.trim().isEmpty()) {
                 if (super.mustExistTitles.contains(entry.getKey())) {
-                    throw new CheckedExcelException(String.format(ExcelConstants.FIELD_LACK_MSG, entry.getKey()));
+                    fieldFailures.add(new RowConvertException.FieldFailure(entry.getKey(),
+                            String.format(ExcelConstants.FIELD_LACK_MSG, entry.getKey())));
+                    continue;
                 }
                 if (super.skipEmptyTitles.contains(entry.getKey())) {
                     continue;
@@ -407,8 +379,13 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
                 super.title2consumers.get(entry.getKey()).accept(convertObject, convertValue);
             } catch (Exception e) {
                 log.warn("EXCEL导入数据转换失败！", e);
-                throw new CheckedExcelException(String.format(ExcelConstants.CONVERT_FAIL_MSG + GlobalExceptionMsgManager.getExceptionMsg(e), entry.getKey()));
+                fieldFailures.add(new RowConvertException.FieldFailure(entry.getKey(),
+                        String.format(ExcelConstants.CONVERT_FAIL_MSG, entry.getKey())
+                                + GlobalExceptionMsgManager.getExceptionMsg(e)));
             }
+        }
+        if (!fieldFailures.isEmpty()) {
+            throw new RowConvertException(fieldFailures);
         }
         return convertObject;
     }
@@ -445,12 +422,6 @@ public class EasyExcelTitleReader<R> extends TitleReader<R> {
     public EasyExcelTitleReader<R> disableBlankRowFilter() {
         super.ENABLE_BLANK_ROW_FILTER = false;
         return this;
-    }
-
-    private boolean isTemplateMismatchException(Exception e) {
-        return e instanceof CheckedExcelException
-                && e.getMessage() != null
-                && e.getMessage().equals(ImportGlobalErrorEnum.TEMPLATE_MISMATCH.getMessage());
     }
 
     private void addGlobalError(ImportGlobalErrorEnum globalError) {

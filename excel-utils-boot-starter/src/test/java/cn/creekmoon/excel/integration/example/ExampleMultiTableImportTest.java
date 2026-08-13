@@ -55,7 +55,7 @@ class ExampleMultiTableImportTest {
                 firstStudent.set(s);
             }
         });
-        ImportReport<Student> studentReport = reader.getReport();
+        ImportReport studentReport = reader.getReport();
         ImportReportAssertions.logReportSummary(studentReport);
         assertEquals(50, studentReport.getTotalRows(), "表格 1 应读到 50 行");
         ImportReportAssertions.assertNoErrors(studentReport);
@@ -66,7 +66,7 @@ class ExampleMultiTableImportTest {
                 .addConvert("工作年限", IntegerConverter::parse, Teacher::setWorkYear)
                 .range(52, 82);
         teacherReader.read(x -> {});
-        ImportReport<Teacher> teacherReport = teacherReader.getReport();
+        ImportReport teacherReport = teacherReader.getReport();
         ImportReportAssertions.logReportSummary(teacherReport);
         assertEquals(30, teacherReport.getTotalRows(), "表格 2 应读到 30 行");
         ImportReportAssertions.assertNoErrors(teacherReport);
@@ -81,7 +81,7 @@ class ExampleMultiTableImportTest {
                 lastStudentOfTable3.set(s);
             }
         });
-        ImportReport<Student> thirdReport = thirdReader.getReport();
+        ImportReport thirdReport = thirdReader.getReport();
         ImportReportAssertions.logReportSummary(thirdReport);
         assertEquals(10, thirdReport.getTotalRows(), "表格 3 应读到 10 行");
         ImportReportAssertions.assertNoErrors(thirdReport);

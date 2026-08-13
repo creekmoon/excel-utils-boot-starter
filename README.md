@@ -41,8 +41,11 @@
    - 新版：结果列**默认只写失败原因**，成功行留空（更节省内存，适合大文件）
 
 3. **新增能力**  
-   - `readWithReport(options)` - 返回结构化 `ImportReport`，可直接序列化为 JSON
-   - `ImportOptions` - 统一配置入口（fail-fast、错误阈值、数据收集策略等）
+   - `readWithReport()` - 返回结构化 `ImportReport`，可直接序列化为 JSON
+
+4. **行级错误一次报全**  
+   - 旧版：一行内第一个字段失败就停止该行转换，用户改完再传才发现下一个错
+   - 新版：同一行内所有失败字段一次性收集，`rowErrors` 每个失败字段一条明细（`field` 标明列名），回写 Excel 时合并到同一格
 
 **迁移示例：**
 
@@ -51,7 +54,7 @@
 reader.rowIndex2msg.get(rowIndex);  // ❌
 
 // 新版
-ImportReport<User> report = reader.getReport();
+ImportReport report = reader.getReport();
 report.getRowErrors();  // ✅ 获取行级错误
 report.getGlobalErrors();  // ✅ 获取导入全局错误
 ```
@@ -281,54 +284,35 @@ public void importSystemConfig(MultipartFile file, HttpServletResponse response)
 
 在实际业务中，我们经常需要获取导入结果，进行后续的验证和处理：
 
+业务校验直接在消费函数里抛异常，框架会把该行记为失败并带上原因；读完从 `getReport()` 拿统计。
+
 ```java
 @PostMapping("/import/users-with-validation")
-public ResponseEntity<ImportSummary> importUsersWithValidation(MultipartFile file, HttpServletResponse response) {
+public void importUsersWithValidation(MultipartFile file, HttpServletResponse response) {
     ExcelImport excelImport = ExcelImport.create(file);
     
-    // 获取导入结果对象
-    TitleReaderResult<User> result = excelImport.switchSheet(0, User::new)
+    TitleReader<User> reader = excelImport.switchSheet(0, User::new)
         .addConvert("用户名", User::setUsername)
         .addConvert("姓名", User::setFullName)
         .addConvert("年龄", IntegerConverter::parse, User::setAge)
         .addConvert("邮箱", User::setEmail)
-        .read(); // 不传入Consumer，先获取所有数据
-    
-    // 获取所有成功解析的数据
-    List<User> users = result.getAll();
-    
-    // 对每个用户进行业务验证
-    for (User user : users) {
-        try {
-            // 业务验证逻辑
+        .read(user -> {
+            // 抛出 CheckedExcelException：只标记当前行失败，后续行继续读
             if (userService.existsByUsername(user.getUsername())) {
-                result.setResultMsg(user, "用户名已存在");
-                continue;
+                throw new CheckedExcelException("用户名已存在");
             }
             if (!isValidEmail(user.getEmail())) {
-                result.setResultMsg(user, "邮箱格式不正确");
-                continue;
+                throw new CheckedExcelException("邮箱格式不正确");
             }
-            
-            // 保存用户
             userService.saveUser(user);
-            result.setResultMsg(user, "导入成功");
-            
-        } catch (Exception e) {
-            result.setResultMsg(user, "保存失败: " + e.getMessage());
-        }
-    }
+        });
+    
+    ImportReport report = reader.getReport();
+    log.info("导入完成：总计 {} 条，成功 {} 条，失败 {} 条",
+             report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
     
     // 生成带有验证结果的Excel文件
     excelImport.response(response);
-    
-    // 返回导入摘要
-    ImportSummary summary = new ImportSummary();
-    summary.setTotalCount(users.size());
-    summary.setSuccessCount(users.size() - result.getErrorCount().get());
-    summary.setErrorCount(result.getErrorCount().get());
-    
-    return ResponseEntity.ok(summary);
 }
 ```
 
@@ -344,31 +328,24 @@ public void importBulkProducts(MultipartFile file, HttpServletResponse response)
     AtomicInteger processedCount = new AtomicInteger(0);
     AtomicInteger successCount = new AtomicInteger(0);
     
-    TitleReaderResult<Product> result = excelImport.switchSheet(0, Product::new)
+    TitleReader<Product> reader = excelImport.switchSheet(0, Product::new)
         .addConvert("产品编码", Product::setProductCode)
         .addConvert("产品名称", Product::setProductName)
         .addConvert("价格", BigDecimalConverter::parse, Product::setPrice)
-        .read()
-        .consume((rowIndex, product) -> {
-            try {
-                // 业务处理
-                productService.saveProduct(product);
-                successCount.incrementAndGet();
-                
-                // 进度反馈（每100条记录输出一次）
-                int processed = processedCount.incrementAndGet();
-                if (processed % 100 == 0) {
-                    log.info("已处理 {} 条记录，成功 {} 条", processed, successCount.get());
-                }
-                
-            } catch (Exception e) {
-                throw new BusinessException("第" + (rowIndex + 1) + "行处理失败: " + e.getMessage());
+        .read((rowIndex, product) -> {
+            productService.saveProduct(product);
+            successCount.incrementAndGet();
+            
+            // 进度反馈（每100条记录输出一次）
+            int processed = processedCount.incrementAndGet();
+            if (processed % 100 == 0) {
+                log.info("已处理 {} 条记录，成功 {} 条", processed, successCount.get());
             }
         });
     
-    // 输出最终统计
+    ImportReport report = reader.getReport();
     log.info("导入完成：总计 {} 条，成功 {} 条，失败 {} 条", 
-             processedCount.get(), successCount.get(), result.getErrorCount().get());
+             report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
     
     excelImport.response(response);
 }
@@ -384,24 +361,26 @@ public void importSchoolData(MultipartFile file, HttpServletResponse response) {
     ExcelImport excelImport = ExcelImport.create(file);
     
     // 导入学生数据（第一个工作表）
-    TitleReaderResult<Student> studentResult = excelImport.switchSheet(0, Student::new)
+    ImportReport studentReport = excelImport.switchSheet(0, Student::new)
         .addConvert("学号", Student::setStudentNo)
         .addConvert("姓名", Student::setName)
         .addConvert("年龄", IntegerConverter::parse, Student::setAge)
-        .read(student -> studentService.saveStudent(student));
+        .read(student -> studentService.saveStudent(student))
+        .getReport();
     
     // 导入教师数据（第二个工作表）
-    TitleReaderResult<Teacher> teacherResult = excelImport.switchSheet(1, Teacher::new)
+    ImportReport teacherReport = excelImport.switchSheet(1, Teacher::new)
         .addConvert("工号", Teacher::setTeacherNo)
         .addConvert("姓名", Teacher::setName)
         .addConvert("学科", Teacher::setSubject)
-        .read(teacher -> teacherService.saveTeacher(teacher));
+        .read(teacher -> teacherService.saveTeacher(teacher))
+        .getReport();
     
     // 输出导入摘要
     log.info("学生导入：成功 {} 条，失败 {} 条", 
-             studentResult.getAll().size(), studentResult.getErrorCount().get());
+             studentReport.getSuccessRows(), studentReport.getErrorRows());
     log.info("教师导入：成功 {} 条，失败 {} 条", 
-             teacherResult.getAll().size(), teacherResult.getErrorCount().get());
+             teacherReport.getSuccessRows(), teacherReport.getErrorRows());
     
     excelImport.response(response);
 }
@@ -413,23 +392,22 @@ public void importSchoolData(MultipartFile file, HttpServletResponse response) {
 
 ```java
 @PostMapping("/api/import/users")
-public ResponseEntity<ImportReport<User>> importUsersApi(@RequestParam("file") MultipartFile file) {
+public ResponseEntity<ImportReport> importUsersApi(@RequestParam("file") MultipartFile file) {
     ExcelImport excelImport = ExcelImport.create(file);
     
-    // 配置导入选项（针对 API 场景优化）
-    ImportOptions options = ImportOptions.forApi(); // fail-fast + 错误阈值 + 不收集成功数据
-    
-    // 直接获取结构化报告
-    ImportReport<User> report = excelImport.switchSheet(0, User::new)
+    // 无需任何配置，直接获取结构化报告
+    ImportReport report = excelImport.switchSheet(0, User::new)
         .addConvert("用户名", User::setUsername)
         .addConvert("邮箱", User::setEmail)
         .addConvert("年龄", IntegerConverter::parse, User::setAge)
-        .readWithReport(options);
+        .readWithReport();
     
     // 报告会自动序列化为 JSON 返回给前端
     return ResponseEntity.ok(report);
 }
 ```
+
+> `readWithReport()` 只统计不消费数据。如果需要边读边处理业务，用 `read(consumer)` 后再取 `getReport()`。
 
 **返回的 JSON 结构示例：**
 
@@ -445,45 +423,41 @@ public ResponseEntity<ImportReport<User>> importUsersApi(@RequestParam("file") M
     {
       "rowIndex": 23,
       "message": "[失败!]字段[年龄]解析失败！不支持的数据格式!",
-      "field": null
+      "field": "年龄"
     },
     {
-      "rowIndex": 45,
+      "rowIndex": 23,
       "message": "[失败!]字段[邮箱]为必填项!",
       "field": "邮箱"
     }
-  ],
-  "data": null
+  ]
 }
 ```
 
-**ImportOptions 配置说明：**
+关于 `rowErrors` 的两点约定：
+
+- **条数不等于 `errorRows`**。同一行有几个字段失败就有几条明细，上例第 23 行两个字段失败，只算 1 个错误行。
+- **`field` 可能为 null**。字段转换类错误会带上列名；`read(consumer)` 或 `addConvertPostProcessor` 里抛出的业务校验错误无法定位到具体列，`field` 为 null。
+
+`ImportReport` 给出的是完整事实，不做截断。如果错误行很多、前端不需要全量展示，由调用方自行裁剪：
 
 ```java
-// 方式1：使用预设（推荐）
-ImportOptions.forApi();            // API 场景：fail-fast + 错误阈值100 + 不收集成功数据
-ImportOptions.forExcelResponse();  // Excel 回写场景：读完整表 + 收集所有错误
-ImportOptions.defaults();          // 默认配置
-
-// 方式2：自定义配置
-ImportOptions options = new ImportOptions();
-options.setFailFastOnTemplateMismatch(true);  // 模板不匹配立即停止
-options.setMaxErrorRows(50);                  // 错误超过50行停止
-options.setCollectRowErrors(true);            // 收集行级错误明细
-options.setCollectSuccessData(false);         // 不收集成功数据（节省内存）
-options.setMaxSuccessData(100);               // 若收集，最多100条
+ImportReport report = reader.readWithReport();
+if (report.getRowErrors().size() > 100) {
+    report.setRowErrors(report.getRowErrors().subList(0, 100));
+}
+return ResponseEntity.ok(report);
 ```
 
-**模板不匹配时的 fail-fast 示例：**
+**模板不匹配会立即停止：**
+
+表头对不上属于文件级失败，继续逐行扫描只会重复同一个原因。此时读取立刻中止，只在 `globalErrors` 记一条 `TEMPLATE_MISMATCH`，行级统计全部为 0。
 
 ```java
-ImportOptions options = new ImportOptions();
-options.setFailFastOnTemplateMismatch(true);
-
-ImportReport<User> report = excelImport.switchSheet(0, User::new)
+ImportReport report = excelImport.switchSheet(0, User::new)
     .addConvert("用户名", User::setUsername)
     .addConvert("不存在的列", User::setEmail)  // 模板不匹配
-    .readWithReport(options);
+    .readWithReport();
 
 // 返回的 JSON
 {
@@ -495,40 +469,24 @@ ImportReport<User> report = excelImport.switchSheet(0, User::new)
 }
 ```
 
-**仍然支持 Excel 回写（兼容旧版）：**
+**一次读取，JSON 报告与 Excel 回写都能拿到：**
+
+同一次读取的结果同时供给两个出口，不需要读第二遍，也不需要任何配置开关。
 
 ```java
-// 读取 + 返回 JSON
-ImportReport<User> report = reader.readWithReport(options);
+ExcelImport excelImport = ExcelImport.create(file);
+ImportReport report = excelImport.switchSheet(0, User::new)
+    .addConvert("用户名", User::setUsername)
+    .addConvert("邮箱", User::setEmail)
+    .readWithReport();
 
-// 如果用户需要下载错误文件，仍可调用 response
+log.info("总计 {} 条，失败 {} 条", report.getTotalRows(), report.getErrorRows());
+
+// 需要让用户下载带错误标记的文件时，直接 response
 if (report.getErrorRows() > 0) {
     excelImport.response(response);
 }
 ```
-
-> ⚠️ **重要：`readWithReport()` 和 `response()` 的兼容性**
-> 
-> 如果需要同时使用 `readWithReport()` 和 `response()`，**必须确保** `ImportOptions.collectRowErrors = true`：
-> 
-> ```java
-> // ✅ 正确：使用预设配置（推荐）
-> ImportOptions options = ImportOptions.forExcelResponse();
-> report = reader.readWithReport(options);
-> excelImport.response(response);  // ✅ 可以正确写入错误
-> 
-> // ✅ 正确：使用默认配置
-> report = reader.readWithReport(ImportOptions.defaults());
-> excelImport.response(response);  // ✅ 可以正确写入错误
-> 
-> // ❌ 错误：自定义配置关闭了 collectRowErrors
-> ImportOptions custom = new ImportOptions();
-> custom.setCollectRowErrors(false);  // ❌ 关闭错误收集
-> report = reader.readWithReport(custom);
-> excelImport.response(response);  // ❌ 无法写入错误到Excel！
-> ```
-> 
-> 如果只需要 **API 返回 JSON**（不需要 response），可以使用 `ImportOptions.forApi()` 以获得更好的性能。
 
 ## 高级特性
 
@@ -583,122 +541,68 @@ ExcelCellStyle customStyle = new ExcelCellStyle((workbook, style) -> {
 
 ### 导入结果处理
 
-#### TitleReaderResult 详解
+#### 三种读取方式
 
-`TitleReaderResult` 是导入操作的核心结果对象，提供了丰富的方法来处理导入结果：
+`TitleReader` 配置完列映射后有三个读取入口，读完都可以通过 `getReport()` 拿到统计：
 
 ```java
-// 四种读取方式
-TitleReaderResult<User> result1 = reader.read();                   				
-TitleReaderResult<User> result2 = reader.read().consume(user -> process(user)); // 直接处理每行数据
-TitleReaderResult<User> result2 = reader.read(user -> process(user)); 			// 直接处理每行数据
-List<User> users = result.getAll();              								// 获取所有成功解析的数据
+// 1. 边读边处理（推荐）：消费函数抛异常即标记该行失败
+reader.read(user -> userService.save(user));
+
+// 2. 需要行号时用双参版本，rowIndex 从 0 开始（表头行也计入）
+reader.read((rowIndex, user) -> log.info("第{}行: {}", rowIndex + 1, user));
+
+// 3. 只要统计、不消费数据
+ImportReport report = reader.readWithReport();
 ```
 
-#### consume方法 vs 直接处理的关键区别
+```java
+// 读完取全量成功数据（内部会触发一次读取）
+List<User> users = reader.getAll();
 
-**使用consume方法的优势：**自动异常处理和结果记录
+// 读完取统计报告
+ImportReport report = reader.getReport();
+```
+
+#### 业务校验：抛异常 vs 手动判断
+
+消费函数里抛异常，框架会自动捕获、累加错误计数、记录行号和原因。**异常类型决定后续行是否继续读**：
 
 ```java
-// 使用consume - 推荐方式
-result.consume(user -> {
-    userService.save(user);  // 如果抛异常，会自动记录到结果中
-    // 成功执行完毕，自动标记为"导入成功!"
+reader.read(user -> {
+    // CheckedExcelException 及 @EnableExcelUtils(customExceptions=...) 注册的异常
+    // → 只标记当前行失败，后续行继续读
+    if (user.getAge() < 18) {
+        throw new CheckedExcelException("年龄不能小于18岁");
+    }
+    if (userService.existsByUsername(user.getUsername())) {
+        throw new CheckedExcelException("用户名已存在");
+    }
+    
+    // 未注册的异常（如 NPE、数据库连接失败）
+    // → 视为非预期故障，整表读取立即中断并记 IMPORT_INTERRUPTED
+    userService.save(user);
 });
-
-// 直接处理 - 需要手动处理异常
-List<User> users = result.getAll();
-for (User user : users) {
-    try {
-        userService.save(user);
-        result.setResultMsg(user, "导入成功!");  // 需要手动设置成功消息
-    } catch (Exception e) {
-        result.setResultMsg(user, e.getMessage()); // 需要手动设置失败消息
-        result.getErrorCount().incrementAndGet();  // 需要手动增加错误计数
-    }
-}
 ```
 
-
-
-**直接处理的适用场景：**需要复杂的业务逻辑判断
+需要批量操作（比如攒够 500 条再落库）时，用 `getAll()` 拿全量数据自行处理。这种方式下框架只负责解析阶段的错误，业务阶段的成败需要你自己记录。
 
 ```java
-List<User> users = result.getAll();
-for (User user : users) {
-    if (needsSpecialValidation(user)) {
-        // 复杂的多步骤验证
-        ValidationResult validation = complexValidation(user);
-        if (validation.isSuccess()) {
-            userService.save(user);
-            result.setResultMsg(user, "特殊验证通过并保存成功");
-        } else {
-            result.setResultMsg(user, validation.getErrorMessage());
-        }
-    } else {
-        // 简单保存
-        userService.save(user);
-        result.setResultMsg(user, "导入成功!");
-    }
-}
+List<User> users = reader.getAll();
+ImportReport report = reader.getReport();  // 解析阶段的统计仍然可用
+
+Lists.partition(users, 500).forEach(batch -> userService.saveBatch(batch));
 ```
 
-**总结对比：**
+**两种方式的取舍：**
 
-| 特性 | consume方法 | 直接处理getAll() |
-|------|------------|------------------|
-| 异常处理 | 自动捕获并记录 | 需要手动try-catch |
-| 成功标记 | 自动设置"导入成功!" | 需要手动setResultMsg |
-| 错误计数 | 自动累加 | 需要手动累加 |
-| 行号信息 | 自动提供 | 无法获取 |
-| 错误格式 | 统一格式 | 需要手动格式化 |
-| 灵活性 | 适合简单处理 | 适合复杂业务逻辑 |
-| 性能优化 | 逐条处理 | 支持批量操作 |
-
-**实际对比示例：**
-
-```java
-// 方式一：使用consume方法（推荐用于简单业务逻辑）
-TitleReaderResult<User> result = excelImport.switchSheet(0, User::new)
-    .addConvert("用户名", User::setUsername)
-    .addConvert("年龄", IntegerConverter::parse, User::setAge)
-    .read()
-    .consume(user -> {
-        // 简洁的业务处理，异常会自动被捕获和记录
-        userService.save(user);
-        // 成功时自动设置"导入成功!"消息
-    });
-
-// 方式二：直接处理getAll()（适用于复杂业务逻辑）
-TitleReaderResult<User> result = excelImport.switchSheet(0, User::new)
-    .addConvert("用户名", User::setUsername)
-    .addConvert("年龄", IntegerConverter::parse, User::setAge)
-    .read();
-
-List<User> users = result.getAll();
-for (User user : users) {
-    try {
-        // 复杂的业务验证
-        if (user.getAge() < 18) {
-            result.setResultMsg(user, "年龄不能小于18岁");
-            continue;
-        }
-        
-        // 批量验证用户名唯一性
-        if (userService.existsByUsername(user.getUsername())) {
-            result.setResultMsg(user, "用户名已存在");
-            continue;
-        }
-        
-        userService.save(user);
-        result.setResultMsg(user, "导入成功!");
-        
-    } catch (Exception e) {
-        result.setResultMsg(user, "保存失败: " + e.getMessage());
-        result.getErrorCount().incrementAndGet();
-    }
-}
-```
+| 特性 | `read(consumer)` | `getAll()` 后自行处理 |
+|------|------------------|----------------------|
+| 异常处理 | 自动捕获并计入报告 | 需要自己 try-catch |
+| 错误计数与行号 | 自动累加、自动带行号 | 无法关联回行号 |
+| 回写 Excel 错误列 | 自动 | 不支持 |
+| 内存占用 | 逐行处理，不驻留 | 全量驻留 |
+| 适用场景 | 逐条业务处理 | 需要批量操作 |
 
 #### 导入结果文件
 
@@ -713,17 +617,16 @@ for (User user : users) {
 | 全局错误枚举 | 含义 | 何时出现 |
 |---------|------|---------|
 | `TEMPLATE_MISMATCH` | 模板不匹配 | Excel 标题列与配置的列不一致 |
-| `ERROR_LIMIT_REACHED` | 错误阈值触发 | 错误行数达到配置的上限 |
 | `IMPORT_INTERRUPTED` | 导入中断 | 非预期异常导致读取中断 |
 
 **导入结果列内容示例：**
 
 ```
-| 用户名  | 邮箱         | 年龄 | 导入结果                                    |
-|--------|-------------|------|-------------------------------------------|
-| zhang  | z@email.com | 25   |                                           | ← 成功行留空
-| li     | invalid     | abc  | [失败!]字段[年龄]解析失败！不支持的数据格式!    |
-| wang   |             | 30   | [失败!]字段[邮箱]为必填项!                  |
+| 用户名  | 邮箱         | 年龄 | 导入结果                                                          |
+|--------|-------------|------|-----------------------------------------------------------------|
+| zhang  | z@email.com | 25   |                                                                 | ← 成功行留空
+| li     | invalid     | abc  | [失败!]字段[年龄]解析失败！不支持的数据格式!                          |
+| wang   |             | abc  | [失败!]字段[邮箱]为必填项!；[失败!]字段[年龄]解析失败！不支持的数据格式! | ← 一行多错合并到一格
 ```
 
 ## 最佳实践

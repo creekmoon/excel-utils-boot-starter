@@ -46,7 +46,7 @@ class ImportTitleReaderTest {
 
             log.info("[STEP] read all rows from sheet0");
             List<Student> dataList = reader.getAll();
-            ImportReport<Student> report = reader.getReport();
+            ImportReport report = reader.getReport();
             ImportReportAssertions.logReportSummary(report);
 
             assertEquals(FixtureCatalog.totalDataRows(), dataList.size(), "parsed row count");
@@ -90,7 +90,7 @@ class ImportTitleReaderTest {
                 }
             });
 
-            ImportReport<Student> report = sheet2.getReport();
+            ImportReport report = sheet2.getReport();
             ImportReportAssertions.logReportSummary(report);
             assertEquals(1, report.getErrorRows());
             assertNotNull(report.getRowErrors());
@@ -154,7 +154,7 @@ class ImportTitleReaderTest {
 
             log.info("[STEP] read with range titleRow=0, firstDataRow=3, lastDataRow=4");
             List<Student> students = reader.getAll();
-            ImportReport<Student> report = reader.getReport();
+            ImportReport report = reader.getReport();
             ImportReportAssertions.logReportSummary(report);
 
             assertEquals(2, students.size());
@@ -171,13 +171,12 @@ class ImportTitleReaderTest {
                     excelImport.switchSheet(0, Student::new));
 
             List<Student> students = reader.getAll();
-            ImportReport<Student> report = reader.getReport();
+            ImportReport report = reader.getReport();
             ImportReportAssertions.logReportSummary(report);
 
             assertEquals(students.size(), report.getSuccessRows());
             assertEquals(FixtureCatalog.totalDataRows(), report.getTotalRows());
             assertEquals(0, report.getErrorRows());
-            assertNull(report.getData());
             ImportReportAssertions.assertBalancedStatistics(report);
             log.info("[DONE] getAll/report consistency verified");
         }

@@ -37,12 +37,22 @@ public class GlobalExceptionMsgManager {
         for (CustomExceptionHandler excelUtilsExceptionHandler : excelUtilsExceptionHandlers) {
             String msg = excelUtilsExceptionHandler.customExceptionMessage(exception);
             if (msg != null) {
-                //可能有嵌套调用的情况 所以每次进来先把两个前缀后缀替换了 否则会出现重复的词语
-                return MSG_PREFIX + msg.replace(MSG_PREFIX, "").replace(MSG_SUFFIX, "") + MSG_SUFFIX;
+                return decorateMsg(msg);
             }
         }
         log.error("ExcelUtils组件遇到无法处理的异常!", exception);
         return ExcelConstants.ERROR_MSG;
+    }
+
+    /**
+     * 为原始消息施加统一的失败前后缀
+     * 可能有嵌套调用的情况, 先剥离已有前后缀再包裹, 否则会出现重复的词语
+     *
+     * @param rawMsg 原始消息文本, 通常取自异常的 getMessage() 或字段级失败明细
+     * @return 施加前后缀后的展示消息
+     */
+    public static String decorateMsg(String rawMsg) {
+        return MSG_PREFIX + rawMsg.replace(MSG_PREFIX, "").replace(MSG_SUFFIX, "") + MSG_SUFFIX;
     }
 
     public static void addExceptionHandler(CustomExceptionHandler handler) {

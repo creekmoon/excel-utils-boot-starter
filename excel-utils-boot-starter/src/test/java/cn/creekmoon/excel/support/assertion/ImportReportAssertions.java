@@ -15,7 +15,7 @@ public final class ImportReportAssertions {
     }
 
     /** totalRows = successRows + errorRows。 */
-    public static <T> void assertBalancedStatistics(ImportReport<T> report) {
+    public static void assertBalancedStatistics(ImportReport report) {
         assertNotNull(report, "ImportReport should not be null");
         assertEquals(report.getTotalRows(), report.getSuccessRows() + report.getErrorRows(),
                 "totalRows must equal successRows + errorRows");
@@ -24,7 +24,7 @@ public final class ImportReportAssertions {
     }
 
     /** 无失败行且无全局错误。 */
-    public static <T> void assertNoErrors(ImportReport<T> report) {
+    public static void assertNoErrors(ImportReport report) {
         assertEquals(0, report.getErrorRows(), "errorRows should be 0");
         assertTrue(report.getGlobalErrors() == null || report.getGlobalErrors().isEmpty(),
                 "globalErrors should be empty");
@@ -32,7 +32,7 @@ public final class ImportReportAssertions {
     }
 
     /** 控制台输出报告摘要，便于对照日志排查。 */
-    public static <T> void logReportSummary(ImportReport<T> report) {
+    public static void logReportSummary(ImportReport report) {
         log.info("[REPORT] sheet={}, total={}, success={}, error={}, globalErrors={}, rowErrorCount={}",
                 report.getSheetName(),
                 report.getTotalRows(),

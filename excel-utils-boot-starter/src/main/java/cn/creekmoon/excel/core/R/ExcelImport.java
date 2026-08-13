@@ -182,18 +182,6 @@ public class ExcelImport {
 
 
     public ExcelImport response(HttpServletResponse response) throws IOException {
-        // 检查是否所有 Reader 都配置了 collectRowErrors
-        for (Reader<?> reader : allReaders) {
-            if (reader instanceof TitleReader<?> titleReader) {
-                var report = titleReader.getReport();
-                if (report != null && report.getRowErrors() == null) {
-                    log.warn("[ExcelImport.response] 检测到 Reader(sheet={}) 未开启 collectRowErrors，" +
-                            "错误信息将无法写入Excel文件。建议使用 ImportOptions.forExcelResponse() 配置。",
-                            titleReader.sheetName);
-                }
-            }
-        }
-        
         File file = generateResultFile();
         ExcelFileUtils.response(file, taskId + ".xlsx", response);
         ExcelFileUtils.cleanTempFileByPathDelay(file);
@@ -259,21 +247,25 @@ public class ExcelImport {
                     }
                     cell1.setCellValue(ExcelConstants.RESULT_TITLE);
 
-                    // 写失败行的错误消息
-                    if (report.getRowErrors() != null && !report.getRowErrors().isEmpty()) {
-                        for (var rowError : report.getRowErrors()) {
-                            org.apache.poi.ss.usermodel.Row dataRow = sheet.getRow(rowError.getRowIndex());
-                            if (dataRow == null) {
-                                dataRow = sheet.createRow(rowError.getRowIndex());
-                            }
-                            Cell cell = dataRow.createCell(msgTitleColumnIndex);
-                            cell.setCellValue(rowError.getMessage());
-                        }
+                    // 写失败行的错误消息（同一行可能有多个失败字段，合并为一条展示）
+                    Map<Integer, StringJoiner> rowIndex2Message = new LinkedHashMap<>();
+                    for (var rowError : report.getRowErrors()) {
+                        rowIndex2Message
+                                .computeIfAbsent(rowError.getRowIndex(),
+                                        x -> new StringJoiner(ExcelConstants.ROW_ERROR_MSG_SEPARATOR))
+                                .add(rowError.getMessage());
                     }
-                    
+                    for (Map.Entry<Integer, StringJoiner> messageEntry : rowIndex2Message.entrySet()) {
+                        org.apache.poi.ss.usermodel.Row dataRow = sheet.getRow(messageEntry.getKey());
+                        if (dataRow == null) {
+                            dataRow = sheet.createRow(messageEntry.getKey());
+                        }
+                        Cell cell = dataRow.createCell(msgTitleColumnIndex);
+                        cell.setCellValue(messageEntry.getValue().toString());
+                    }
+
                     // 如果存在全局错误且没有行错误，至少写一条全局错误提示
-                    if (report.hasGlobalErrors()
-                            && (report.getRowErrors() == null || report.getRowErrors().isEmpty())) {
+                    if (report.hasGlobalErrors() && rowIndex2Message.isEmpty()) {
                         Integer targetRowIndex = report.getProcessedFirstRowIndex() != null 
                                 ? report.getProcessedFirstRowIndex() 
                                 : titleReader.firstRowIndex;

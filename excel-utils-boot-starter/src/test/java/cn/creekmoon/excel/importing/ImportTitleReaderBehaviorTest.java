@@ -55,7 +55,7 @@ class ImportTitleReaderBehaviorTest {
                     {"user3", 30, "u3@qq.com"},
             };
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("must.xlsx", rows(table)));
-            ImportReport<Student> report = excelImport.switchSheet(0, Student::new)
+            ImportReport report = excelImport.switchSheet(0, Student::new)
                     .addConvert("用户名", Student::setUserName)
                     .addConvertAndMustExist("年龄", IntegerConverter::parse, Student::setAge)
                     .addConvert("邮箱", Student::setEmail)
@@ -95,7 +95,7 @@ class ImportTitleReaderBehaviorTest {
         @Test
         void convertFailure_rowErrorContainsColumnName() throws Exception {
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("conv.xlsx", rows(STD_TABLE)));
-            ImportReport<Student> report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
+            ImportReport report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
 
             assertEquals(1, report.getErrorRows());
             assertTrue(report.getRowErrors().get(0).getMessage().contains("字段[年龄]解析失败"), report.getRowErrors().get(0).getMessage());
@@ -117,7 +117,7 @@ class ImportTitleReaderBehaviorTest {
                     {"user2", 30, "u2@qq.com"},
             };
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("blank.xlsx", rows(withEmpty)));
-            ImportReport<Student> report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
+            ImportReport report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
 
             assertEquals(2, report.getTotalRows());
             assertEquals(2, report.getSuccessRows());
@@ -144,7 +144,7 @@ class ImportTitleReaderBehaviorTest {
             reader.addConvert("用户名", Student::setUserName)
                     .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                     .addConvert("邮箱", Student::setEmail);
-            ImportReport<Student> report = reader.disableBlankRowFilter().readWithReport();
+            ImportReport report = reader.disableBlankRowFilter().readWithReport();
 
             assertEquals(2, report.getTotalRows(), "全空字符串行在 SAX 层不产生 invoke");
         }
@@ -162,7 +162,7 @@ class ImportTitleReaderBehaviorTest {
                     {"user2", 30, "u2@qq.com", "y"},
             };
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("remark.xlsx", rows(withRemark)));
-            ImportReport<Student> report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
+            ImportReport report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
 
             assertEquals(3, report.getTotalRows(), "有未注册列值的行不被空白过滤");
             assertEquals(2, report.getSuccessRows());
@@ -174,18 +174,19 @@ class ImportTitleReaderBehaviorTest {
     @Nested
     class TemplateConsistency {
 
-        /** 缺失列 + 非 fail-fast：标记 TEMPLATE_MISMATCH，数据行按模板检查失败处理。 */
+        /** 缺失列：模板不匹配属于文件级失败，立即停止且不扫描数据行。 */
         @Test
-        void missingColumn_marksTemplateMismatch_continuesReading() throws Exception {
+        void missingColumn_marksTemplateMismatch_stopsImmediately() throws Exception {
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("tmpl.xlsx", rows(STD_TABLE)));
-            ImportReport<Student> report = excelImport.switchSheet(0, Student::new)
+            ImportReport report = excelImport.switchSheet(0, Student::new)
                     .addConvert("用户名", Student::setUserName)
                     .addConvert("不存在的列", Student::setEmail)
                     .readWithReport();
 
             assertTrue(report.getGlobalErrors().contains(ImportGlobalErrorEnum.TEMPLATE_MISMATCH));
+            assertEquals(0, report.getTotalRows());
             assertEquals(0, report.getSuccessRows());
-            assertEquals(5, report.getErrorRows());
+            assertEquals(0, report.getErrorRows());
         }
 
         /** disableTemplateConsistencyCheck：缺失列不产生全局错误，可正常读取。 */
@@ -200,7 +201,7 @@ class ImportTitleReaderBehaviorTest {
                     .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                     .addConvert("邮箱", Student::setEmail)
                     .addConvert("不存在的列", Student::setEmail);
-            ImportReport<Student> report = reader.disableTemplateConsistencyCheck().readWithReport();
+            ImportReport report = reader.disableTemplateConsistencyCheck().readWithReport();
 
             assertFalse(report.getGlobalErrors().contains(ImportGlobalErrorEnum.TEMPLATE_MISMATCH));
             assertEquals(5, report.getTotalRows());
@@ -252,7 +253,7 @@ class ImportTitleReaderBehaviorTest {
             // 表头列需配齐绑定列，避免模板不匹配全局错误干扰"空数据"语义
             Object[][] headerOnly = {{"用户名", "年龄", "邮箱"}};
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("header-only.xlsx", rows(headerOnly)));
-            ImportReport<Student> report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
+            ImportReport report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
 
             assertEquals(0, report.getTotalRows());
             assertEquals(0, report.getSuccessRows());
@@ -263,7 +264,7 @@ class ImportTitleReaderBehaviorTest {
         @Test
         void noConvertsRegistered_skipsAllDataRows() throws Exception {
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("no-conv.xlsx", rows(STD_TABLE)));
-            ImportReport<Student> report = excelImport.switchSheet(0, Student::new).readWithReport();
+            ImportReport report = excelImport.switchSheet(0, Student::new).readWithReport();
 
             assertEquals(0, report.getTotalRows());
         }
@@ -271,7 +272,7 @@ class ImportTitleReaderBehaviorTest {
         @Test
         void reportMetadata_populatedFromConfig() throws Exception {
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("meta.xlsx", rows(STD_TABLE)));
-            ImportReport<Student> report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
+            ImportReport report = bindStd(excelImport.switchSheet(0, Student::new)).readWithReport();
 
             assertNotNull(report.getTaskId());
             assertEquals("Sheet0", report.getSheetName());
@@ -288,22 +289,21 @@ class ImportTitleReaderBehaviorTest {
     @Nested
     class RepeatedRead {
 
-        /**
-         * 现状契约：read() 二次调用不重置报告，统计会累加（readWithReport 每次重置）。
-         * 该用例锁定现状，若后续修复请同步调整。
-         */
+        /** 每次 read 都重置报告，重复读取不会让统计累加。 */
         @Test
-        void secondRead_accumulatesStatistics_insteadOfResetting() throws Exception {
+        void secondRead_resetsReport() throws Exception {
             ExcelImport excelImport = ExcelImport.create(XlsxTestBuilder.multipartFile("repeat.xlsx", rows(STD_TABLE)));
             TitleReader<Student> reader = bindStd(excelImport.switchSheet(0, Student::new));
 
             reader.read(x -> {});
-            ImportReport<Student> first = reader.getReport();
+            ImportReport first = reader.getReport();
             assertEquals(5, first.getTotalRows());
 
             reader.read(x -> {});
-            ImportReport<Student> second = reader.getReport();
-            assertEquals(10, second.getTotalRows(), "第二次 read 未重置报告，统计翻倍（现状锁定）");
+            ImportReport second = reader.getReport();
+            assertEquals(5, second.getTotalRows(), "第二次 read 应重置报告，统计不累加");
+            assertEquals(4, second.getSuccessRows());
+            assertEquals(1, second.getErrorRows());
         }
     }
 

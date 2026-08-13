@@ -13,6 +13,9 @@ public class ExcelConstants {
 
     public static final String FIELD_LACK_MSG = "字段[%s]为必填项! ";
 
+    /* 同一行存在多个失败字段时, 合并展示所用的分隔符 */
+    public static final String ROW_ERROR_MSG_SEPARATOR = "；";
+
     /**
      * 日期单元格统一读取格式。
      * EasyExcel 在无实体类(Map 模式)下默认把日期单元格转成分钟精度字符串，

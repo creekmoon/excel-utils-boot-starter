@@ -43,7 +43,7 @@ graph TB
     subgraph keep["继续复用（不改动）"]
         POI["POI: 结果回写 generateResultFile"]
         CFG["ExcelUtilsConfig / Spring 配置"]
-        REP["ImportReport / ImportOptions"]
+        REP["ImportReport"]
     end
     EI -->|switchSheet| ETR
     EI -->|switchSheetAndUseCellReader| ECR
@@ -239,7 +239,7 @@ graph TB
 
 - 不改 `ExcelImport` / `ExcelExport` 的任何公开方法签名、参数类型、返回值类型、调用顺序
 - 不改 `TitleReader` / `CellReader` / `TitleWriter` / `Writer` 抽象类定义
-- 不改 `ImportReport` / `ImportOptions` / `ImportGlobalErrorEnum` 字段与语义
+- 不改 `ImportReport` / `ImportOptions` / `ImportGlobalErrorEnum` 字段与语义（本条为底层替换迭代的边界；`ImportOptions` 已在 §10 的导入契约收敛中删除）
 - 不改 `ExcelUtilsConfig` / `EnableExcelUtils` / `ExcelUtilsAutoConfiguration` Spring 配置机制
 - 不改 `generateResultFile()` 结果回写逻辑（继续用 POI XSSFWorkbook）
 - 不改 `addTitle("父::子")` 多级表头描述语法
@@ -323,7 +323,7 @@ graph TB
 |------|------|
 | `POST /import/basic` | 基础按行读取 + 类型转换 |
 | `POST /import/with-report` | 返回 JSON 报告（API 场景） |
-| `POST /import/with-options` | fail-fast + 错误阈值 + 结果文件生成 |
+| `POST /import/report-and-excel` | 一次读取同时产出 JSON 报告与结果文件 |
 | `POST /import/with-range` | range 控制读取范围 |
 | `POST /import/with-cell-reader` | 指定单元格读取 |
 | `POST /import/with-reset` | 同一 Sheet 多表格（reset） |
@@ -407,3 +407,38 @@ graph TB
   - example 模块 `RandomUtil` → JDK `ThreadLocalRandom`
 - **依赖清理**：parent `dependencyManagement` 与 starter `pom.xml` 中的 `hutool-all` 已移除；编译产物中不再包含 hutool 任何模块
 - **验证**：`mvn test -pl excel-utils-boot-starter` 全绿；全仓 grep 无 `cn.hutool` 残留
+
+## 10）导入契约收敛（2026-08-14）
+
+3.0.0 仍处预览期未正式发布，本次直接调整导入侧契约，不保留兼容层，版本号维持 3.0.0。
+
+#### 变更动机
+
+`ImportOptions` 的 5 个开关本质上是让调用方替框架决定「读多少、收集什么」，但这些决定并不由业务场景驱动：
+
+- `maxErrorRows` 达阈值即停止读取，导致后半段有效数据未被处理、回写文件只有半张表、统计口径失真
+- `failFastOnTemplateMismatch=false` 时，表头对不上仍逐行扫描，`errorRows` 涨到全表行数而 `rowErrors` 为空，报告自相矛盾
+- `collectRowErrors=false` 与 `response()` 组合会静默产出无错误信息的结果文件，需要文档反复警告
+- `collectSuccessData` 与 `read(consumer)` / `getAll()` 能力重复，且会把全量对象驻留内存
+
+#### 契约调整清单
+
+| 项 | 调整 | 影响 |
+|----|------|------|
+| `ImportOptions` | 整类删除 | `readWithReport(options)` → `readWithReport()` |
+| `ImportReport<R>` | 去掉泛型参数 | 声明处改为 `ImportReport` |
+| `ImportReport.data` | 删除 | 取成功数据改用 `read(consumer)` 或 `getAll()` |
+| `ImportGlobalErrorEnum.ERROR_LIMIT_REACHED` | 删除 | 不再有「错误够多就停」的行为 |
+| 模板不匹配 | 无条件 fail-fast | 只记 `TEMPLATE_MISMATCH`，行级统计归零 |
+| 行内多字段失败 | 一次收全 | 新增 `RowConvertException` 承载多条 `FieldFailure`；`rowErrors` 每个失败字段一条并带 `field`；回写 Excel 时按 `rowIndex` 合并到同一格 |
+| `read()` 重复调用 | 每次重置报告 | 统计不再累加 |
+
+`ImportReport` 的字段语义（统计 / `globalErrors` / `rowErrors`）与 §5 承诺一致；删除 `ERROR_LIMIT_REACHED` 后 `globalErrors` 收敛为「导致读取终止的原因」这一单一含义，行级失败一律只进 `rowErrors`。
+
+#### 有意不做
+
+**导出投影 API**（如 `report.toSummary(maxRowErrors)`）：`rowErrors` 条数过多属于展示层问题，调用方 `subList` 一行即可解决，框架不为此增加 API 面积。README 已给出示例。
+
+#### 验证
+- `mvn test -pl excel-utils-boot-starter` 146/146 测试通过
+- `mvn test-compile` 全模块（含 example）BUILD SUCCESS

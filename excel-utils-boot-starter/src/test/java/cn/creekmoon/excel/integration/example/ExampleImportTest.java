@@ -6,7 +6,6 @@ import cn.creekmoon.excel.core.R.converter.IntegerConverter;
 import cn.creekmoon.excel.core.R.converter.LocalDateTimeConverter;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
 import cn.creekmoon.excel.core.R.report.ImportGlobalErrorEnum;
-import cn.creekmoon.excel.core.R.report.ImportOptions;
 import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.support.assertion.ImportReportAssertions;
 import cn.creekmoon.excel.support.fixture.ImportTestHelper;
@@ -77,16 +76,16 @@ class ExampleImportTest {
     @Nested
     class WithReport {
 
-        /** 复刻 /import/with-report：forApi 预设返回结构化报告。 */
+        /** 复刻 /import/with-report：返回结构化报告。 */
         @Test
-        void importWithReport_apiPreset_returnsBalancedReport() throws Exception {
-            ImportReport<Student> report = ImportTestHelper.createImport(FIXTURE)
+        void importWithReport_returnsBalancedReport() throws Exception {
+            ImportReport report = ImportTestHelper.createImport(FIXTURE)
                     .switchSheet(0, Student::new)
                     .addConvert("用户名", Student::setUserName)
                     .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                     .addConvert("邮箱", Student::setEmail)
                     .addConvert("生日", DateConverter::parse, Student::setBirthday)
-                    .readWithReport(ImportOptions.forApi());
+                    .readWithReport();
             ImportReportAssertions.logReportSummary(report);
 
             assertEquals(DATA_ROWS, report.getTotalRows());
@@ -121,7 +120,7 @@ class ExampleImportTest {
         /** 复刻 /import/with-post-processor：年龄>60 时邮箱必须以 @qq.com 结尾（成功路径）。 */
         @Test
         void postProcessor_validData_allRowsPass() throws Exception {
-            ImportReport<Student> report = ImportTestHelper.createImport(FIXTURE)
+            ImportReport report = ImportTestHelper.createImport(FIXTURE)
                     .switchSheet(0, Student::new)
                     .addConvert("用户名", Student::setUserName)
                     .addConvert("年龄", IntegerConverter::parse, Student::setAge)
@@ -133,7 +132,7 @@ class ExampleImportTest {
                             }
                         }
                     })
-                    .readWithReport(ImportOptions.defaults());
+                    .readWithReport();
 
             assertEquals(DATA_ROWS, report.getTotalRows());
             assertEquals(DATA_ROWS, report.getSuccessRows());
@@ -148,7 +147,7 @@ class ExampleImportTest {
                     {"user1", 70, "u1@163.com"},      // 年龄>60 且非 @qq.com → 校验失败
                     {"user2", 30, "u2@qq.com"},
             };
-            ImportReport<Student> report = ExcelImport.create(XlsxTestBuilder.multipartFile("pp.xlsx", Arrays.asList(table)))
+            ImportReport report = ExcelImport.create(XlsxTestBuilder.multipartFile("pp.xlsx", Arrays.asList(table)))
                     .switchSheet(0, Student::new)
                     .addConvert("用户名", Student::setUserName)
                     .addConvert("年龄", IntegerConverter::parse, Student::setAge)
@@ -160,7 +159,7 @@ class ExampleImportTest {
                             }
                         }
                     })
-                    .readWithReport(ImportOptions.defaults());
+                    .readWithReport();
 
             assertEquals(1, report.getTotalRows(), "失败行后续不再读取");
             assertEquals(0, report.getSuccessRows());
@@ -175,13 +174,13 @@ class ExampleImportTest {
         /** 复刻 /import/with-validation：必填+可空+跳过空白组合，fixture 全量通过。 */
         @Test
         void validationRules_allRowsPassOnValidFixture() throws Exception {
-            ImportReport<Student> report = ImportTestHelper.createImport(FIXTURE)
+            ImportReport report = ImportTestHelper.createImport(FIXTURE)
                     .switchSheet(0, Student::new)
                     .addConvertAndMustExist("用户名", Student::setUserName)
                     .addConvertAndMustExist("全名", Student::setFullName)
                     .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                     .addConvertAndSkipEmpty("邮箱", Student::setEmail)
-                    .readWithReport(ImportOptions.defaults());
+                    .readWithReport();
 
             assertEquals(DATA_ROWS, report.getTotalRows());
             assertEquals(DATA_ROWS, report.getSuccessRows());
@@ -196,11 +195,11 @@ class ExampleImportTest {
                     {"", 20, "u1@qq.com"},            // 用户名必填缺失
                     {"user2", 30, "u2@qq.com"},
             };
-            ImportReport<Student> report = ExcelImport.create(XlsxTestBuilder.multipartFile("req.xlsx", Arrays.asList(table)))
+            ImportReport report = ExcelImport.create(XlsxTestBuilder.multipartFile("req.xlsx", Arrays.asList(table)))
                     .switchSheet(0, Student::new)
                     .addConvertAndMustExist("用户名", Student::setUserName)
                     .addConvert("年龄", IntegerConverter::parse, Student::setAge)
-                    .readWithReport(ImportOptions.defaults());
+                    .readWithReport();
 
             assertEquals(1, report.getErrorRows());
             assertEquals(1, report.getSuccessRows());

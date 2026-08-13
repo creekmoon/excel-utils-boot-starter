@@ -5,7 +5,6 @@ import cn.creekmoon.excel.core.R.converter.DateConverter;
 import cn.creekmoon.excel.core.R.converter.IntegerConverter;
 import cn.creekmoon.excel.core.R.converter.LocalDateTimeConverter;
 import cn.creekmoon.excel.core.R.reader.title.TitleReader;
-import cn.creekmoon.excel.core.R.report.ImportOptions;
 import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.core.W.ExcelExport;
 import cn.creekmoon.excel.core.W.title.TitleWriter;
@@ -347,10 +346,10 @@ public class ExampleController {
 
     @PostMapping("/import/with-report")
     @Operation(summary = "导入并返回 JSON 报告", description = "API 场景：不生成 Excel，直接返回结构化报告")
-    public ResponseEntity<ImportReport<Student>> importWithReport(MultipartFile file) throws Exception {
+    public ResponseEntity<ImportReport> importWithReport(MultipartFile file) throws Exception {
         file = fallbackFile(file, "导入测试.xlsx");
 
-        ImportReport<Student> report = ExcelImport.create(file)
+        ImportReport report = ExcelImport.create(file)
                 .switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
@@ -358,7 +357,7 @@ public class ExampleController {
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
                 .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .readWithReport(ImportOptions.forApi());
+                .readWithReport();
 
         log.info("导入完成：总计 {} 条，成功 {} 条，失败 {} 条",
                 report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
@@ -366,28 +365,20 @@ public class ExampleController {
         return ResponseEntity.ok(report);
     }
 
-    @PostMapping("/import/with-options")
-    @Operation(summary = "自定义配置导入", description = "fail-fast + 错误阈值 + 行错误收集 + 结果文件生成")
-    public void importWithOptions(MultipartFile file, HttpServletResponse response) throws Exception {
+    @PostMapping("/import/report-and-excel")
+    @Operation(summary = "一次读取同时产出报告与结果文件", description = "同一次读取的结果既可取 JSON 报告，也可回写错误列到 Excel")
+    public void importReportAndExcel(MultipartFile file, HttpServletResponse response) throws Exception {
         file = fallbackFile(file, "导入测试.xlsx");
 
-        // 步骤1：读取并获取结构化报告
-        ImportOptions options = new ImportOptions();
-        options.setFailFastOnTemplateMismatch(true);   // 模板不匹配立即停止
-        options.setMaxErrorRows(50);                   // 错误超过 50 行停止
-        options.setCollectRowErrors(true);             // 收集行级错误明细
-        options.setCollectSuccessData(false);          // 不收集成功数据（省内存）
-
-        TitleReader<Student> reader = ExcelImport.create(file)
-                .switchSheet(0, Student::new)
+        ExcelImport excelImport = ExcelImport.create(file);
+        ImportReport report = excelImport.switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail)
                 .addConvert("生日", DateConverter::parse, Student::setBirthday)
-                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime);
-
-        ImportReport<Student> report = reader.readWithReport(options);
+                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
+                .readWithReport();
 
         log.info("导入完成：总计 {} 条，成功 {} 条，失败 {} 条",
                 report.getTotalRows(), report.getSuccessRows(), report.getErrorRows());
@@ -396,18 +387,7 @@ public class ExampleController {
             log.warn("全局错误：{} - {}", report.getGlobalErrors(), report.getGlobalErrorDisplayMessage());
         }
 
-        // 步骤2：重新读取以生成带错误标记的结果 Excel（必须使用 forExcelResponse 配置）
-        ExcelImport resultImport = ExcelImport.create(file);
-        resultImport.switchSheet(0, Student::new)
-                .addConvert("用户名", Student::setUserName)
-                .addConvert("全名", Student::setFullName)
-                .addConvert("年龄", IntegerConverter::parse, Student::setAge)
-                .addConvert("邮箱", Student::setEmail)
-                .addConvert("生日", DateConverter::parse, Student::setBirthday)
-                .addConvert("过期时间", LocalDateTimeConverter::parse, Student::setExpTime)
-                .readWithReport(ImportOptions.forExcelResponse());
-
-        resultImport.response(response);
+        excelImport.response(response);
     }
 
     @PostMapping("/import/with-range")
@@ -490,10 +470,10 @@ public class ExampleController {
 
     @PostMapping("/import/with-post-processor")
     @Operation(summary = "后置处理器", description = "convert 完成后执行跨字段校验")
-    public ResponseEntity<ImportReport<Student>> importWithPostProcessor(MultipartFile file) throws Exception {
+    public ResponseEntity<ImportReport> importWithPostProcessor(MultipartFile file) throws Exception {
         file = fallbackFile(file, "导入测试.xlsx");
 
-        ImportReport<Student> report = ExcelImport.create(file)
+        ImportReport report = ExcelImport.create(file)
                 .switchSheet(0, Student::new)
                 .addConvert("用户名", Student::setUserName)
                 .addConvert("全名", Student::setFullName)
@@ -507,23 +487,23 @@ public class ExampleController {
                         }
                     }
                 })
-                .readWithReport(ImportOptions.defaults());
+                .readWithReport();
 
         return ResponseEntity.ok(report);
     }
 
     @PostMapping("/import/with-validation")
     @Operation(summary = "字段级校验", description = "必填字段 + 可空字段 + 跳过空白")
-    public ResponseEntity<ImportReport<Student>> importWithValidation(MultipartFile file) throws Exception {
+    public ResponseEntity<ImportReport> importWithValidation(MultipartFile file) throws Exception {
         file = fallbackFile(file, "导入测试.xlsx");
 
-        ImportReport<Student> report = ExcelImport.create(file)
+        ImportReport report = ExcelImport.create(file)
                 .switchSheet(0, Student::new)
                 .addConvertAndMustExist("用户名", Student::setUserName)       // 必填
                 .addConvertAndMustExist("全名", Student::setFullName)         // 必填
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)  // 普通转换
                 .addConvertAndSkipEmpty("邮箱", Student::setEmail)             // 空白则跳过
-                .readWithReport(ImportOptions.defaults());
+                .readWithReport();
 
         return ResponseEntity.ok(report);
     }

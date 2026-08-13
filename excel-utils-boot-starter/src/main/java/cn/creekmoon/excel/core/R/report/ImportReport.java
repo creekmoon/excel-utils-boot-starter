@@ -11,11 +11,9 @@ import java.util.stream.Collectors;
 /**
  * Excel导入结果报告（结构化，支持JSON序列化）
  * 大版本升级：替代 rowIndex2msg 成为唯一事实来源
- *
- * @param <R> 导入的数据类型
  */
 @Data
-public class ImportReport<R> {
+public class ImportReport {
 
     /**
      * 任务唯一标识
@@ -79,13 +77,9 @@ public class ImportReport<R> {
 
     /**
      * 行级错误明细列表
+     * 同一行可能存在多条（每个失败字段一条），因此条数不等于 errorRows
      */
     private List<RowError> rowErrors = new ArrayList<>();
-
-    /**
-     * 成功导入的数据（可选，由 ImportOptions 控制是否收集）
-     */
-    private List<R> data;
 
     public boolean hasGlobalErrors() {
         return globalErrors != null && !globalErrors.isEmpty();

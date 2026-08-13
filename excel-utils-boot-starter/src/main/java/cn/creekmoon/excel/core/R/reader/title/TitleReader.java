@@ -2,7 +2,6 @@ package cn.creekmoon.excel.core.R.reader.title;
 
 import cn.creekmoon.excel.core.R.ExcelImport;
 import cn.creekmoon.excel.core.R.reader.Reader;
-import cn.creekmoon.excel.core.R.report.ImportOptions;
 import cn.creekmoon.excel.core.R.report.ImportReport;
 import cn.creekmoon.excel.util.exception.ExBiConsumer;
 import cn.creekmoon.excel.util.exception.ExConsumer;
@@ -59,10 +58,7 @@ public abstract class TitleReader<R> extends Reader<R> {
 
 
     /*导入结果报告（大版本：替代 rowIndex2msg 作为唯一事实来源）*/
-    protected ImportReport<R> report;
-
-    /*导入配置选项*/
-    protected ImportOptions options;
+    protected ImportReport report;
 
     /*存在读取失败的数据*/
     public AtomicReference<Boolean> EXISTS_READ_FAIL = new AtomicReference<>(false);
@@ -84,25 +80,18 @@ public abstract class TitleReader<R> extends Reader<R> {
     }
 
     /**
-     * 读取并返回结构化导入报告（使用默认配置）
+     * 读取并返回结构化导入报告
+     * 不消费数据, 只需要统计与错误明细时使用; 需要处理数据请用 read(consumer) 后取 getReport()
+     *
      * @return 导入结果报告
      */
-    public ImportReport<R> readWithReport() {
-        return readWithReport(ImportOptions.defaults());
-    }
-
-    /**
-     * 读取并返回结构化导入报告（使用指定配置）
-     * @param options 导入配置选项
-     * @return 导入结果报告
-     */
-    abstract public ImportReport<R> readWithReport(ImportOptions options);
+    abstract public ImportReport readWithReport();
 
     /**
      * 获取导入结果报告（必须先调用 read/getAll/readWithReport）
      * @return 导入结果报告，若未执行读取则返回 null
      */
-    public ImportReport<R> getReport() {
+    public ImportReport getReport() {
         return report;
     }
 

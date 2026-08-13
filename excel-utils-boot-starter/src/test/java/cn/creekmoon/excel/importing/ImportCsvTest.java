@@ -45,7 +45,7 @@ class ImportCsvTest {
                 .addConvert("邮箱", Student::setEmail);
 
         List<Student> students = reader.getAll();
-        ImportReport<Student> report = reader.getReport();
+        ImportReport report = reader.getReport();
         ImportReportAssertions.logReportSummary(report);
 
         assertEquals(EXPECTED_CSV_DATA_ROWS, csvDataRows);

@@ -63,7 +63,7 @@ class ExampleLargeImportTest {
             }
         });
 
-        ImportReport<Student> report = reader.getReport();
+        ImportReport report = reader.getReport();
         ImportReportAssertions.logReportSummary(report);
         assertEquals(SHEET0_ROWS, report.getTotalRows(), "Sheet0 应读到 20 万行");
         assertEquals(SHEET0_ROWS, report.getSuccessRows());
@@ -110,7 +110,7 @@ class ExampleLargeImportTest {
             }
         });
 
-        ImportReport<Student> report = reader.getReport();
+        ImportReport report = reader.getReport();
         ImportReportAssertions.logReportSummary(report);
         assertEquals(SHEET1_ROWS, report.getTotalRows(), "Sheet1 应读到 1 万行");
         assertEquals(SHEET1_ROWS, report.getSuccessRows());

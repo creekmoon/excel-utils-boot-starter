@@ -57,7 +57,7 @@ class ImportExportRoundtripTest {
                 .addConvert("年龄", IntegerConverter::parse, Student::setAge)
                 .addConvert("邮箱", Student::setEmail);
         List<Student> imported = reader.read(item -> count.incrementAndGet()).getAll();
-        ImportReport<Student> report = reader.getReport();
+        ImportReport report = reader.getReport();
         ImportReportAssertions.logReportSummary(report);
         ImportReportAssertions.assertNoErrors(report);
 
